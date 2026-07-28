@@ -12,11 +12,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: calc(100vh - 74px); /* Subtract Header height */
+            height: calc(100vh - 74px);
             width: 100vw;
         }
 
-        /* Forces canvas to always render internal 1200x800 resolution while fitting cleanly inside the window */
         canvas {
             background: radial-gradient(circle, #223822 0%, #0d160d 100%);
             max-width: 100%;
@@ -30,6 +29,7 @@
     </style>
 </head>
 <body class="flex flex-col h-screen text-gray-100">
+
     <header id="gameHeader" class="bg-gray-900/90 border-b border-emerald-800/50 p-4 flex flex-wrap justify-between items-center shadow-lg h-[74px]">
         <div class="flex items-center space-x-3">
             <div class="bg-emerald-600 text-white font-black px-3.5 py-1.5 rounded-xl text-lg tracking-wider glow-green">
@@ -38,7 +38,6 @@
             <select id="tankSelect" class="bg-gray-800 text-emerald-400 font-bold border border-emerald-700/50 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" title="Change Tank (Applies next round)"></select>
         </div>
 
-        <!-- HUD Health & Score Status -->
         <div class="flex items-center space-x-3 text-sm flex-1 justify-center">
             <div class="flex items-center space-x-2 bg-emerald-950/70 px-3 py-1.5 rounded-xl border border-emerald-700/50 w-44">
                 <div class="flex flex-col w-full">
@@ -64,19 +63,18 @@
         </div>
         
         <div class="text-[10px] font-bold text-gray-500 text-right uppercase">
-            Cooldown: <span id="cooldownStatus" class="text-emerald-300">READY</span>
+            Cooldown: <span id="cooldownStatus" class="text-emerald-300">READY</span><br/>
+            <span class="text-[9px] text-emerald-500/70 hidden sm:inline">Hold SHIFT to Auto-Aim (Modern Tanks)</span>
         </div>
     </header>
 
     <main class="relative cursor-crosshair">
         <canvas id="simCanvas" width="1200" height="800"></canvas>
         
-        <!-- Multiplayer Connection Lobby -->
         <div id="lobbyModal" class="absolute inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-40">
             <div class="bg-gray-900 border border-emerald-500/50 p-8 rounded-2xl text-center shadow-2xl max-w-sm w-full mx-4">
                 <h2 class="text-2xl font-black text-emerald-400 mb-2">JOIN MATCH</h2>
                 <p class="text-gray-400 text-xs mb-6">Connect to the server to play.</p>
-                
                 <button id="joinBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow-lg glow-green">
                     Connect & Ready Up
                 </button>
@@ -85,7 +83,6 @@
             </div>
         </div>
         
-        <!-- Game Over UI -->
         <div id="gameOverModal" class="absolute inset-0 bg-black/70 flex items-center justify-center z-30 hidden">
             <div class="text-center">
                 <h2 id="gameOverTitle" class="text-6xl font-black mb-4 drop-shadow-lg tracking-widest">VICTORY</h2>
@@ -94,11 +91,9 @@
         </div>
     </main>
 
-    <!-- Socket.io Script Injection (Will load automatically from Node server) -->
     <script src="/socket.io/socket.io.js"></script>
     
     <script>
-        // Copy TANK_DATA here just to populate the UI Select dropdown
         const TANK_DATA = {
             "WW1": [{ id: "mkiv", name: "Mark IV (UK)" }, { id: "a7v", name: "A7V (GER)" }, { id: "ft17", name: "Renault FT (FRA)" }],
             "WW2": [{ id: "m4", name: "M4 Sherman (USA)" }, { id: "t34", name: "T-34 (USSR)" }, { id: "tiger", name: "Tiger I (GER)" }, { id: "stug", name: "StuG III TD (GER)" }],
@@ -116,33 +111,26 @@
         select.innerHTML = html;
         select.value = "m4";
 
-        // Listen for tank changes and notify the server immediately
-        select.addEventListener('change', (e) => {
-            if (socket && socket.connected) {
-                socket.emit('changeTank', e.target.value);
-            }
-        });
-
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
         
-        // Multiplayer State
         let socket;
         let myId = null;
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
         
-        // Client-side visual interpolation state
+        // Visuals only memory
         let clientTanks = {};
-
-        // Client-side visual effects (we don't send particles over network to save bandwidth)
         let explosions = [];
         let particles = [];
 
-        // Input State
-        const inputs = { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false };
+        // Track Keyboard and Mouse
+        const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
 
-        // Scale mouse coords based on canvas CSS stretching
+        select.addEventListener('change', (e) => {
+            if (socket && socket.connected) socket.emit('changeTank', e.target.value);
+        });
+
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -156,6 +144,7 @@
             if (e.key === 'a' || e.key === 'A') inputs.a = true;
             if (e.key === 's' || e.key === 'S') inputs.s = true;
             if (e.key === 'd' || e.key === 'D') inputs.d = true;
+            if (e.key === 'Shift') inputs.shift = true;
         });
 
         window.addEventListener('keyup', (e) => {
@@ -163,24 +152,23 @@
             if (e.key === 'a' || e.key === 'A') inputs.a = false;
             if (e.key === 's' || e.key === 'S') inputs.s = false;
             if (e.key === 'd' || e.key === 'D') inputs.d = false;
+            if (e.key === 'Shift') inputs.shift = false;
         });
 
         canvas.addEventListener('mousedown', (e) => { if (e.button === 0) inputs.mouseDown = true; });
         canvas.addEventListener('mouseup', (e) => { if (e.button === 0) inputs.mouseDown = false; });
 
-        // Connect Button
         document.getElementById('joinBtn').addEventListener('click', () => {
             document.getElementById('joinBtn').classList.add('hidden');
             document.getElementById('lobbyStatus').classList.remove('hidden');
             document.getElementById('lobbyStatus').innerText = "Connecting...";
             
             try {
-                // Initialize socket connection
                 socket = io();
 
                 socket.on('connect', () => {
                     document.getElementById('lobbyStatus').innerText = "Waiting for Opponent...";
-                    socket.emit('join', document.getElementById('tankSelect').value);
+                    socket.emit('join', select.value);
                 });
 
                 socket.on('init', (id) => { myId = id; });
@@ -222,7 +210,6 @@
                     }
                 });
 
-                // Spawn local particles based on server events
                 socket.on('effect', (data) => {
                     if (data.type === 'fire') {
                         for (let i = 0; i < 5; i++) {
@@ -241,7 +228,7 @@
                     }
                 });
 
-                // Send inputs to server 60 times a second (reduced latency)
+                // Send inputs rapidly for smooth server movement
                 setInterval(() => {
                     if (myId) socket.emit('input', inputs);
                 }, 1000 / 60);
@@ -249,9 +236,17 @@
             } catch(e) {
                 document.getElementById('lobbyStatus').classList.add('hidden');
                 document.getElementById('lobbyError').classList.remove('hidden');
-                document.getElementById('lobbyError').innerText = "Unable to connect. Are you running the backend server?";
+                document.getElementById('lobbyError').innerText = "Unable to connect.";
             }
         });
+
+        function getTankName(id) {
+            for (let era in TANK_DATA) {
+                let match = TANK_DATA[era].find(t => t.id === id);
+                if (match) return match.name;
+            }
+            return "UNKNOWN TANK";
+        }
 
         function updateHUD() {
             if (!myId || !serverState.players[myId]) return;
@@ -260,11 +255,9 @@
             let enemyId = serverState.p1Id === myId ? serverState.p2Id : serverState.p1Id;
             const enemy = enemyId ? serverState.players[enemyId] : null;
 
-            // Player HUD
             document.getElementById('playerHpBar').style.width = Math.max(0, (me.hp / me.maxHp) * 100) + '%';
-            document.getElementById('playerTankName').innerText = me.tankName || "YOU";
+            document.getElementById('playerTankName').innerText = getTankName(me.tankTypeId);
             
-            // Cooldown HUD
             const cdEl = document.getElementById('cooldownStatus');
             if (me.reloadCooldown <= 0) {
                 cdEl.innerText = "READY";
@@ -274,16 +267,14 @@
                 cdEl.className = "text-amber-500";
             }
 
-            // Enemy HUD
             if (enemy) {
                 document.getElementById('enemyHpBar').style.width = Math.max(0, (enemy.hp / enemy.maxHp) * 100) + '%';
-                document.getElementById('enemyTankName').innerText = enemy.tankName || "ENEMY";
+                document.getElementById('enemyTankName').innerText = getTankName(enemy.tankTypeId);
             } else {
                 document.getElementById('enemyHpBar').style.width = '0%';
                 document.getElementById('enemyTankName').innerText = "WAITING...";
             }
 
-            // Scoreboard
             let myScore = serverState.p1Id === myId ? serverState.scores.p1 : serverState.scores.p2;
             let enemyScore = serverState.p1Id === myId ? serverState.scores.p2 : serverState.scores.p1;
             document.getElementById('scoreText').innerText = `${myScore} - ${enemyScore}`;
@@ -292,63 +283,36 @@
         function drawTree(ctx, tree, time) {
             ctx.save();
             const sway = Math.sin(time * 0.002 + tree.swayOffset) * 2;
-            
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.beginPath();
-            ctx.arc(tree.x, tree.y + 4, tree.radius * 0.8, 0, Math.PI * 2);
-            ctx.fill();
-
+            ctx.beginPath(); ctx.arc(tree.x, tree.y + 4, tree.radius * 0.8, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#1e3f20';
-            ctx.beginPath();
-            ctx.moveTo(tree.x + sway, tree.y - tree.radius * 1.5);
-            ctx.lineTo(tree.x - tree.radius + sway*0.5, tree.y + tree.radius);
-            ctx.lineTo(tree.x + tree.radius + sway*0.5, tree.y + tree.radius);
-            ctx.closePath();
-            ctx.fill();
-
+            ctx.beginPath(); ctx.moveTo(tree.x + sway, tree.y - tree.radius * 1.5); ctx.lineTo(tree.x - tree.radius + sway*0.5, tree.y + tree.radius); ctx.lineTo(tree.x + tree.radius + sway*0.5, tree.y + tree.radius); ctx.closePath(); ctx.fill();
             ctx.fillStyle = '#2d5a27';
-            ctx.beginPath();
-            ctx.moveTo(tree.x + sway*0.8, tree.y - tree.radius * 1.1);
-            ctx.lineTo(tree.x - tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5);
-            ctx.lineTo(tree.x + tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5);
-            ctx.closePath();
-            ctx.fill();
+            ctx.beginPath(); ctx.moveTo(tree.x + sway*0.8, tree.y - tree.radius * 1.1); ctx.lineTo(tree.x - tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.lineTo(tree.x + tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.closePath(); ctx.fill();
             ctx.restore();
         }
 
         function drawTank(ctx, p, isMe) {
             ctx.save();
             ctx.translate(p.x, p.y);
-
             const color = isMe ? '#166534' : '#991b1b';
             const trackColor = isMe ? '#052e16' : '#450a0a';
             const turretColor = isMe ? '#15803d' : '#b91c1c';
 
-            // Tracks
             ctx.save();
             ctx.rotate(p.angle);
             ctx.fillStyle = trackColor;
-            ctx.fillRect(-18, -20, 36, 10);
-            ctx.fillRect(-18, 10, 36, 10);
-
-            // Hull Body
+            ctx.fillRect(-18, -20, 36, 10); ctx.fillRect(-18, 10, 36, 10);
             ctx.fillStyle = color;
             ctx.fillRect(-15, -13, 30, 26);
             ctx.restore();
 
-            // Turret & Barrel
             ctx.rotate(p.turretAngle);
             ctx.fillStyle = turretColor;
-            ctx.beginPath();
-            ctx.arc(0, 0, 11, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = trackColor;
-            ctx.stroke();
-
+            ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = trackColor; ctx.stroke();
             ctx.fillStyle = trackColor;
             ctx.fillRect(0, -4, 26, 8);
-
             ctx.restore();
         }
 
@@ -357,90 +321,76 @@
             frameCount++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Trees
+            // Draw Tactical Map Grid
+            ctx.strokeStyle = 'rgba(74, 222, 128, 0.05)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= canvas.width; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+            for (let y = 0; y <= canvas.height; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
+            ctx.fillStyle = 'rgba(74, 222, 128, 0.15)'; ctx.font = 'bold 10px Inter'; ctx.fillText("GRID SCALE: 100m", 15, canvas.height - 15);
+
+            // Client-Side Aimbot logic
+            if (inputs.shift && myId && serverState.players[myId]) {
+                const stabTanks = ['m4', 'm48', 't55', 'leo1', 'm1a2', 't90'];
+                let me = serverState.players[myId];
+                if (stabTanks.includes(me.tankTypeId)) {
+                    let enemyId = serverState.p1Id === myId ? serverState.p2Id : serverState.p1Id;
+                    let enemy = serverState.players[enemyId];
+                    if (enemy && enemy.hp > 0) {
+                        inputs.mouseX = enemy.x; inputs.mouseY = enemy.y;
+                        ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)'; ctx.lineWidth = 2;
+                        ctx.beginPath(); ctx.arc(enemy.x, enemy.y, 25, 0, Math.PI * 2); ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(enemy.x - 35, enemy.y); ctx.lineTo(enemy.x - 15, enemy.y);
+                        ctx.moveTo(enemy.x + 35, enemy.y); ctx.lineTo(enemy.x + 15, enemy.y);
+                        ctx.moveTo(enemy.x, enemy.y - 35); ctx.lineTo(enemy.x, enemy.y - 15);
+                        ctx.moveTo(enemy.x, enemy.y + 35); ctx.lineTo(enemy.x, enemy.y + 15);
+                        ctx.stroke();
+                    }
+                }
+            }
+
             trees.forEach(tree => drawTree(ctx, tree, frameCount));
 
-            // 2. Interpolate and Draw Players
+            // Smooth Interpolation Drawing
             for (let id in serverState.players) {
                 let p = serverState.players[id];
-                if (!p || p.hp <= 0) {
-                    delete clientTanks[id]; // clean up dead tanks from interpolation memory
-                    continue;
-                }
+                if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
                 
-                // Initialize if new
-                if (!clientTanks[id]) {
-                    clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
-                }
-                
+                if (!clientTanks[id]) clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
                 let ct = clientTanks[id];
                 
-                // Distance check: If server says we teleported (respawned), snap immediately
-                if (Math.hypot(p.x - ct.x, p.y - ct.y) > 100) {
-                    ct.x = p.x;
-                    ct.y = p.y;
-                } else {
-                    // Smooth linear interpolation (lerp) towards server position
-                    ct.x += (p.x - ct.x) * 0.35;
-                    ct.y += (p.y - ct.y) * 0.35;
-                }
+                if (Math.hypot(p.x - ct.x, p.y - ct.y) > 100) { ct.x = p.x; ct.y = p.y; } 
+                else { ct.x += (p.x - ct.x) * 0.35; ct.y += (p.y - ct.y) * 0.35; }
                 
-                // Smooth angle rotation (shortest path)
-                let aDiff = p.angle - ct.angle;
-                while (aDiff < -Math.PI) aDiff += Math.PI * 2;
-                while (aDiff > Math.PI) aDiff -= Math.PI * 2;
-                ct.angle += aDiff * 0.35;
+                let aDiff = p.angle - ct.angle; while (aDiff < -Math.PI) aDiff += Math.PI * 2; while (aDiff > Math.PI) aDiff -= Math.PI * 2; ct.angle += aDiff * 0.35;
+                let tDiff = p.turretAngle - ct.turretAngle; while (tDiff < -Math.PI) tDiff += Math.PI * 2; while (tDiff > Math.PI) tDiff -= Math.PI * 2; ct.turretAngle += tDiff * 0.4;
 
-                let tDiff = p.turretAngle - ct.turretAngle;
-                while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-                while (tDiff > Math.PI) tDiff -= Math.PI * 2;
-                ct.turretAngle += tDiff * 0.4;
-
-                // Merge the interpolated visuals with the server's state (HP, name, etc)
                 let interpolatedTank = { ...p, x: ct.x, y: ct.y, angle: ct.angle, turretAngle: ct.turretAngle };
-                
                 drawTank(ctx, interpolatedTank, id === myId);
             }
 
-            // 3. Draw Server Projectiles
             ctx.fillStyle = '#fef08a';
             serverState.projectiles.forEach(p => {
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
             });
 
-            // 4. Update and Draw Local Client Effects
             explosions.forEach(exp => {
-                exp.radius += 2.2;
-                exp.alpha -= 0.07;
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, exp.alpha);
-                ctx.fillStyle = exp.color;
-                ctx.beginPath();
-                ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
+                exp.radius += 2.2; exp.alpha -= 0.07;
+                ctx.save(); ctx.globalAlpha = Math.max(0, exp.alpha); ctx.fillStyle = exp.color;
+                ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
             });
             explosions = explosions.filter(exp => exp.alpha > 0);
 
             particles.forEach(pt => {
-                pt.x += pt.vx;
-                pt.y += pt.vy;
-                pt.life--;
-                pt.size *= 0.94;
-                ctx.save();
-                ctx.globalAlpha = pt.life / pt.maxLife;
-                ctx.fillStyle = pt.color;
-                ctx.fillRect(pt.x, pt.y, pt.size, pt.size);
-                ctx.restore();
+                pt.x += pt.vx; pt.y += pt.vy; pt.life--; pt.size *= 0.94;
+                ctx.save(); ctx.globalAlpha = pt.life / pt.maxLife; ctx.fillStyle = pt.color;
+                ctx.fillRect(pt.x, pt.y, pt.size, pt.size); ctx.restore();
             });
             particles = particles.filter(pt => pt.life > 0);
 
             requestAnimationFrame(renderLoop);
         }
 
-        // Start render loop immediately
         renderLoop();
 
     </script>
