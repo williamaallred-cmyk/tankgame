@@ -30,13 +30,12 @@
     </style>
 </head>
 <body class="flex flex-col h-screen text-gray-100">
-
     <header id="gameHeader" class="bg-gray-900/90 border-b border-emerald-800/50 p-4 flex flex-wrap justify-between items-center shadow-lg h-[74px]">
         <div class="flex items-center space-x-3">
             <div class="bg-emerald-600 text-white font-black px-3.5 py-1.5 rounded-xl text-lg tracking-wider glow-green">
                 TANK DUEL ONLINE
             </div>
-            <p class="text-[10px] text-emerald-400 hidden xl:block max-w-[150px] leading-tight">Server Authoritative Sync</p>
+            <select id="tankSelect" class="bg-gray-800 text-emerald-400 font-bold border border-emerald-700/50 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer" title="Change Tank (Applies next round)"></select>
         </div>
 
         <!-- HUD Health & Score Status -->
@@ -76,12 +75,7 @@
         <div id="lobbyModal" class="absolute inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-40">
             <div class="bg-gray-900 border border-emerald-500/50 p-8 rounded-2xl text-center shadow-2xl max-w-sm w-full mx-4">
                 <h2 class="text-2xl font-black text-emerald-400 mb-2">JOIN MATCH</h2>
-                <p class="text-gray-400 text-xs mb-6">Select a tank to connect to the server.</p>
-                
-                <div class="mb-6 text-left">
-                    <label class="block text-[10px] text-emerald-400 font-bold uppercase mb-1">Vehicle Selection</label>
-                    <select id="tankSelect" class="w-full bg-emerald-950 text-white border border-emerald-700/50 rounded p-2 outline-none cursor-pointer"></select>
-                </div>
+                <p class="text-gray-400 text-xs mb-6">Connect to the server to play.</p>
                 
                 <button id="joinBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow-lg glow-green">
                     Connect & Ready Up
@@ -122,6 +116,13 @@
         select.innerHTML = html;
         select.value = "m4";
 
+        // Listen for tank changes and notify the server immediately
+        select.addEventListener('change', (e) => {
+            if (socket && socket.connected) {
+                socket.emit('changeTank', e.target.value);
+            }
+        });
+
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -131,6 +132,9 @@
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
         
+        // Client-side visual interpolation state
+        let clientTanks = {};
+
         // Client-side visual effects (we don't send particles over network to save bandwidth)
         let explosions = [];
         let particles = [];
@@ -237,10 +241,10 @@
                     }
                 });
 
-                // Send inputs to server 30 times a second
+                // Send inputs to server 60 times a second (reduced latency)
                 setInterval(() => {
                     if (myId) socket.emit('input', inputs);
-                }, 1000 / 30);
+                }, 1000 / 60);
 
             } catch(e) {
                 document.getElementById('lobbyStatus').classList.add('hidden');
@@ -356,10 +360,46 @@
             // 1. Draw Trees
             trees.forEach(tree => drawTree(ctx, tree, frameCount));
 
-            // 2. Draw Players
+            // 2. Interpolate and Draw Players
             for (let id in serverState.players) {
                 let p = serverState.players[id];
-                if (p && p.hp > 0) drawTank(ctx, p, id === myId);
+                if (!p || p.hp <= 0) {
+                    delete clientTanks[id]; // clean up dead tanks from interpolation memory
+                    continue;
+                }
+                
+                // Initialize if new
+                if (!clientTanks[id]) {
+                    clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
+                }
+                
+                let ct = clientTanks[id];
+                
+                // Distance check: If server says we teleported (respawned), snap immediately
+                if (Math.hypot(p.x - ct.x, p.y - ct.y) > 100) {
+                    ct.x = p.x;
+                    ct.y = p.y;
+                } else {
+                    // Smooth linear interpolation (lerp) towards server position
+                    ct.x += (p.x - ct.x) * 0.35;
+                    ct.y += (p.y - ct.y) * 0.35;
+                }
+                
+                // Smooth angle rotation (shortest path)
+                let aDiff = p.angle - ct.angle;
+                while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+                while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+                ct.angle += aDiff * 0.35;
+
+                let tDiff = p.turretAngle - ct.turretAngle;
+                while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+                while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+                ct.turretAngle += tDiff * 0.4;
+
+                // Merge the interpolated visuals with the server's state (HP, name, etc)
+                let interpolatedTank = { ...p, x: ct.x, y: ct.y, angle: ct.angle, turretAngle: ct.turretAngle };
+                
+                drawTank(ctx, interpolatedTank, id === myId);
             }
 
             // 3. Draw Server Projectiles
