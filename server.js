@@ -28,51 +28,46 @@ const TANK_STATS = {
     "t90": { hp: 5, speed: 3.8, reload: 100, damage: 2, range: 1100, accuracy: 0.02, turretSpeed: 0.12 }
 };
 
-let players = {};
-let projectiles = [];
-let trees = [];
-let p1Id = null;
-let p2Id = null;
-let gameState = "WAITING"; // WAITING, PLAYING, GAMEOVER
-let scores = { p1: 0, p2: 0 };
+let activeRooms = {};
+let waitingSockets = [];
 
 function dist(x1, y1, x2, y2) {
     return Math.hypot(x2 - x1, y2 - y1);
 }
 
-// Generate the map
-function resetBoard() {
-    projectiles = [];
-    trees = [];
+function createPlayer(id, tankId) {
+    return {
+        x: -1000, y: -1000, angle: 0, turretAngle: 0, hp: 0, maxHp: 0, 
+        reloadCooldown: 0, tankTypeId: tankId || 'm4',
+        inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false }
+    };
+}
+
+function resetBoard(room) {
+    room.projectiles = [];
+    room.trees = [];
     const margin = 120;
 
-    // Pick random opposite corners for spawns
     let corners = [
         [{x: margin, y: margin, angle: Math.PI/4}, {x: 1200-margin, y: 800-margin, angle: -Math.PI*0.75}],
         [{x: 1200-margin, y: margin, angle: Math.PI*0.75}, {x: margin, y: 800-margin, angle: -Math.PI/4}]
     ];
     let selectedCorners = corners[Math.floor(Math.random() * corners.length)];
     
-    // Assign spawn points
-    if (players[p1Id]) {
-        players[p1Id].x = selectedCorners[0].x;
-        players[p1Id].y = selectedCorners[0].y;
-        players[p1Id].angle = selectedCorners[0].angle;
-        players[p1Id].turretAngle = selectedCorners[0].angle;
-        players[p1Id].hp = TANK_STATS[players[p1Id].tankTypeId].hp;
-        players[p1Id].reloadCooldown = 0;
+    if (room.players[room.p1Id]) {
+        let p = room.players[room.p1Id];
+        p.x = selectedCorners[0].x; p.y = selectedCorners[0].y;
+        p.angle = selectedCorners[0].angle; p.turretAngle = selectedCorners[0].angle;
+        p.hp = TANK_STATS[p.tankTypeId].hp; p.reloadCooldown = 0;
     }
     
-    if (players[p2Id]) {
-        players[p2Id].x = selectedCorners[1].x;
-        players[p2Id].y = selectedCorners[1].y;
-        players[p2Id].angle = selectedCorners[1].angle;
-        players[p2Id].turretAngle = selectedCorners[1].angle;
-        players[p2Id].hp = TANK_STATS[players[p2Id].tankTypeId].hp;
-        players[p2Id].reloadCooldown = 0;
+    if (room.players[room.p2Id]) {
+        let p = room.players[room.p2Id];
+        p.x = selectedCorners[1].x; p.y = selectedCorners[1].y;
+        p.angle = selectedCorners[1].angle; p.turretAngle = selectedCorners[1].angle;
+        p.hp = TANK_STATS[p.tankTypeId].hp; p.reloadCooldown = 0;
     }
 
-    // Spawn cover in the middle ground
     const numTrees = 12 + Math.floor(Math.random() * 8);
     for (let i = 0; i < numTrees; i++) {
         let tx, ty, safe;
@@ -80,199 +75,247 @@ function resetBoard() {
         do {
             tx = 1200 * 0.25 + Math.random() * (1200 * 0.5);
             ty = 800 * 0.2 + Math.random() * (800 * 0.6);
-            safe = players[p1Id] && dist(tx, ty, players[p1Id].x, players[p1Id].y) > 150 && 
-                   players[p2Id] && dist(tx, ty, players[p2Id].x, players[p2Id].y) > 150;
+            safe = room.players[room.p1Id] && dist(tx, ty, room.players[room.p1Id].x, room.players[room.p1Id].y) > 150 && 
+                   room.players[room.p2Id] && dist(tx, ty, room.players[room.p2Id].x, room.players[room.p2Id].y) > 150;
             attempts++;
         } while (!safe && attempts < 50);
 
-        if (safe) trees.push({ x: tx, y: ty, radius: 22 + Math.random() * 12, swayOffset: Math.random() * Math.PI * 2 });
+        if (safe) room.trees.push({ x: tx, y: ty, radius: 22 + Math.random() * 12, swayOffset: Math.random() * Math.PI * 2 });
     }
 }
 
 io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
-    // Player joins the match
+    // Player attempts to join matchmaking
     socket.on('join', (tankId) => {
-        if (!p1Id) {
-            p1Id = socket.id;
-        } else if (!p2Id && socket.id !== p1Id) {
-            p2Id = socket.id;
+        // Prevent double joining
+        if (socket.roomId || waitingSockets.includes(socket)) return;
+
+        socket.tankId = tankId || 'm4';
+
+        // Check for a valid waiting opponent
+        let opponent = null;
+        while(waitingSockets.length > 0) {
+            let potential = waitingSockets.shift();
+            // Ensure they haven't disconnected while in queue
+            if (potential.connected && potential.id !== socket.id) {
+                opponent = potential;
+                break;
+            }
+        }
+
+        if (opponent) {
+            // Match found! Create a private room
+            let roomId = "room_" + Math.random().toString(36).substring(7);
+            
+            socket.join(roomId);
+            opponent.join(roomId);
+            
+            socket.roomId = roomId;
+            opponent.roomId = roomId;
+
+            let room = {
+                id: roomId,
+                p1Id: opponent.id,
+                p2Id: socket.id,
+                players: {},
+                projectiles: [],
+                trees: [],
+                gameState: "PLAYING",
+                scores: { p1: 0, p2: 0 }
+            };
+
+            room.players[opponent.id] = createPlayer(opponent.id, opponent.tankId);
+            room.players[socket.id] = createPlayer(socket.id, socket.tankId);
+            
+            activeRooms[roomId] = room;
+            resetBoard(room);
+
+            // Emit ONLY to players in this specific room
+            io.to(roomId).emit('gameStart', { trees: room.trees, p1Id: room.p1Id, p2Id: room.p2Id });
         } else {
-            socket.emit('lobbyError', 'Match is full!');
-            return;
-        }
-
-        players[socket.id] = {
-            x: -1000, y: -1000, angle: 0, turretAngle: 0, hp: 0, maxHp: 0, 
-            reloadCooldown: 0, tankTypeId: tankId || 'm4',
-            inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false }
-        };
-
-        if (p1Id && p2Id) {
-            gameState = "PLAYING";
-            resetBoard();
-            io.emit('gameStart', { trees, p1Id, p2Id });
+            // No opponent found, enter queue
+            waitingSockets.push(socket);
         }
     });
 
-    // Player changes tank mid-game (applied next round)
     socket.on('changeTank', (tankId) => {
-        if (players[socket.id] && TANK_STATS[tankId]) {
-            players[socket.id].tankTypeId = tankId;
+        socket.tankId = tankId; // Save for next game
+        if (socket.roomId && activeRooms[socket.roomId]) {
+            let room = activeRooms[socket.roomId];
+            if (room.players[socket.id] && TANK_STATS[tankId]) {
+                room.players[socket.id].tankTypeId = tankId;
+            }
         }
     });
 
-    // Receive player keyboard and mouse inputs
     socket.on('input', (data) => {
-        if (players[socket.id] && gameState === "PLAYING") {
-            players[socket.id].inputs = data;
+        if (socket.roomId && activeRooms[socket.roomId]) {
+            let room = activeRooms[socket.roomId];
+            if (room.players[socket.id] && room.gameState === "PLAYING") {
+                room.players[socket.id].inputs = data;
+            }
         }
     });
 
     socket.on('disconnect', () => {
-        delete players[socket.id];
-        if (socket.id === p1Id) p1Id = null;
-        if (socket.id === p2Id) p2Id = null;
-        gameState = "WAITING";
-        scores = { p1: 0, p2: 0 };
-        io.emit('playerLeft');
+        // Remove from waiting queue if they were there
+        let index = waitingSockets.indexOf(socket);
+        if (index !== -1) waitingSockets.splice(index, 1);
+
+        // If they were in an active match
+        if (socket.roomId && activeRooms[socket.roomId]) {
+            let room = activeRooms[socket.roomId];
+            let opponentId = (socket.id === room.p1Id) ? room.p2Id : room.p1Id;
+            let roomId = socket.roomId;
+            
+            io.to(roomId).emit('playerLeft');
+            delete activeRooms[roomId];
+            
+            // Rescue the surviving opponent and push them back into the matchmaking queue
+            let opponentSocket = io.sockets.sockets.get(opponentId);
+            if (opponentSocket) {
+                opponentSocket.roomId = null;
+                opponentSocket.leave(roomId);
+                waitingSockets.push(opponentSocket);
+            }
+        }
     });
 });
 
 setInterval(() => {
-    if (gameState === "PLAYING") {
+    // Process every active match independently
+    for (let roomId in activeRooms) {
+        let room = activeRooms[roomId];
         
-        // 1. Process Players
-        for (let id in players) {
-            let p = players[id];
-            if (p.hp <= 0) continue;
-
-            let stats = TANK_STATS[p.tankTypeId];
-            p.maxHp = stats.hp;
-
-            let moveX = 0; let moveY = 0;
-            if (p.inputs.w) moveY -= 1;
-            if (p.inputs.s) moveY += 1;
-            if (p.inputs.a) moveX -= 1;
-            if (p.inputs.d) moveX += 1;
-
-            if (moveX !== 0 || moveY !== 0) {
-                let targetAngle = Math.atan2(moveY, moveX);
-                p.angle = targetAngle;
-                let nextX = p.x + Math.cos(targetAngle) * stats.speed;
-                let nextY = p.y + Math.sin(targetAngle) * stats.speed;
-
-                let hitTree = false;
-                for (let tree of trees) {
-                    if (dist(nextX, nextY, tree.x, tree.y) < 18 + tree.radius) {
-                        hitTree = true; break;
-                    }
-                }
-                if (!hitTree) {
-                    p.x = Math.max(30, Math.min(1170, nextX));
-                    p.y = Math.max(30, Math.min(770, nextY));
-                }
-            }
-
-            // Turret Rotation with Traverse Speed Constraint
-            let targetTurretAngle = Math.atan2(p.inputs.mouseY - p.y, p.inputs.mouseX - p.x);
-            let tDiff = targetTurretAngle - p.turretAngle;
-            while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-            while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+        if (room.gameState === "PLAYING") {
             
-            if (Math.abs(tDiff) <= stats.turretSpeed) {
-                p.turretAngle = targetTurretAngle;
-            } else {
-                p.turretAngle += Math.sign(tDiff) * stats.turretSpeed;
-            }
+            // 1. Process Players
+            for (let id in room.players) {
+                let p = room.players[id];
+                if (p.hp <= 0) continue;
 
-            // Firing Logic with Accuracy Spread and Range limits
-            if (p.reloadCooldown <= 0 && p.inputs.mouseDown) {
-                let muzzleX = p.x + Math.cos(p.turretAngle) * 28;
-                let muzzleY = p.y + Math.sin(p.turretAngle) * 28;
-                
-                let spreadAngle = p.turretAngle + (Math.random() - 0.5) * stats.accuracy;
-                
-                projectiles.push({ 
-                    x: muzzleX, y: muzzleY, 
-                    angle: spreadAngle, 
-                    speed: 7.5, 
-                    shooterId: id, 
-                    damage: stats.damage,
-                    distance: 0,
-                    maxRange: stats.range
-                });
-                p.reloadCooldown = stats.reload;
-                io.emit('effect', { type: 'fire', x: muzzleX, y: muzzleY });
-            }
-            if (p.reloadCooldown > 0) p.reloadCooldown--;
-        }
+                let stats = TANK_STATS[p.tankTypeId];
+                p.maxHp = stats.hp;
 
-        // 2. Process Projectiles
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-            let proj = projectiles[i];
-            proj.x += Math.cos(proj.angle) * proj.speed;
-            proj.y += Math.sin(proj.angle) * proj.speed;
-            proj.distance += proj.speed;
+                let moveX = 0; let moveY = 0;
+                if (p.inputs.w) moveY -= 1;
+                if (p.inputs.s) moveY += 1;
+                if (p.inputs.a) moveX -= 1;
+                if (p.inputs.d) moveX += 1;
 
-            let hit = false;
-            
-            // Limit bullet distance based on tank range stat
-            if (proj.distance > proj.maxRange) {
-                hit = true;
-                io.emit('effect', { type: 'hitTree', x: proj.x, y: proj.y }); // Generic puff
-            }
+                if (moveX !== 0 || moveY !== 0) {
+                    let targetAngle = Math.atan2(moveY, moveX);
+                    p.angle = targetAngle;
+                    let nextX = p.x + Math.cos(targetAngle) * stats.speed;
+                    let nextY = p.y + Math.sin(targetAngle) * stats.speed;
 
-            // Map Bounds
-            if (!hit && (proj.x < 0 || proj.x > 1200 || proj.y < 0 || proj.y > 800)) hit = true;
-
-            // Tree Collision
-            if (!hit) {
-                for (let tree of trees) {
-                    if (dist(proj.x, proj.y, tree.x, tree.y) < tree.radius + 4) {
-                        hit = true;
-                        io.emit('effect', { type: 'hitTree', x: proj.x, y: proj.y });
-                        break;
-                    }
-                }
-            }
-
-            // Tank Collision
-            if (!hit) {
-                for (let id in players) {
-                    let p = players[id];
-                    if (id !== proj.shooterId && p.hp > 0 && dist(proj.x, proj.y, p.x, p.y) < 18 + 4) {
-                        hit = true;
-                        p.hp -= proj.damage;
-                        io.emit('effect', { type: 'hitTank', x: proj.x, y: proj.y, damage: proj.damage });
-
-                        if (p.hp <= 0) {
-                            if (proj.shooterId === p1Id) scores.p1++;
-                            if (proj.shooterId === p2Id) scores.p2++;
-                            gameState = "GAMEOVER";
-                            io.emit('gameOver', { winnerId: proj.shooterId });
-                            
-                            setTimeout(() => {
-                                if(gameState === "GAMEOVER" && p1Id && p2Id) {
-                                    gameState = "PLAYING";
-                                    resetBoard();
-                                    io.emit('gameStart', { trees, p1Id, p2Id });
-                                }
-                            }, 3000);
+                    let hitTree = false;
+                    for (let tree of room.trees) {
+                        if (dist(nextX, nextY, tree.x, tree.y) < 18 + tree.radius) {
+                            hitTree = true; break;
                         }
-                        break;
+                    }
+                    if (!hitTree) {
+                        p.x = Math.max(30, Math.min(1170, nextX));
+                        p.y = Math.max(30, Math.min(770, nextY));
                     }
                 }
+
+                let targetTurretAngle = Math.atan2(p.inputs.mouseY - p.y, p.inputs.mouseX - p.x);
+                let tDiff = targetTurretAngle - p.turretAngle;
+                while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+                while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+                
+                if (Math.abs(tDiff) <= stats.turretSpeed) {
+                    p.turretAngle = targetTurretAngle;
+                } else {
+                    p.turretAngle += Math.sign(tDiff) * stats.turretSpeed;
+                }
+
+                if (p.reloadCooldown <= 0 && p.inputs.mouseDown) {
+                    let muzzleX = p.x + Math.cos(p.turretAngle) * 28;
+                    let muzzleY = p.y + Math.sin(p.turretAngle) * 28;
+                    let spreadAngle = p.turretAngle + (Math.random() - 0.5) * stats.accuracy;
+                    
+                    room.projectiles.push({ 
+                        x: muzzleX, y: muzzleY, 
+                        angle: spreadAngle, 
+                        speed: 7.5, 
+                        shooterId: id, 
+                        damage: stats.damage,
+                        distance: 0,
+                        maxRange: stats.range
+                    });
+                    p.reloadCooldown = stats.reload;
+                    io.to(roomId).emit('effect', { type: 'fire', x: muzzleX, y: muzzleY });
+                }
+                if (p.reloadCooldown > 0) p.reloadCooldown--;
             }
 
-            if (hit) projectiles.splice(i, 1);
-        }
+            // 2. Process Projectiles
+            for (let i = room.projectiles.length - 1; i >= 0; i--) {
+                let proj = room.projectiles[i];
+                proj.x += Math.cos(proj.angle) * proj.speed;
+                proj.y += Math.sin(proj.angle) * proj.speed;
+                proj.distance += proj.speed;
 
-        // 3. Broadcast State
-        io.emit('stateUpdate', { players, projectiles, p1Id, p2Id, scores });
+                let hit = false;
+                
+                if (proj.distance > proj.maxRange) {
+                    hit = true;
+                    io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y }); 
+                }
+
+                if (!hit && (proj.x < 0 || proj.x > 1200 || proj.y < 0 || proj.y > 800)) hit = true;
+
+                if (!hit) {
+                    for (let tree of room.trees) {
+                        if (dist(proj.x, proj.y, tree.x, tree.y) < tree.radius + 4) {
+                            hit = true;
+                            io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y });
+                            break;
+                        }
+                    }
+                }
+
+                if (!hit) {
+                    for (let id in room.players) {
+                        let p = room.players[id];
+                        if (id !== proj.shooterId && p.hp > 0 && dist(proj.x, proj.y, p.x, p.y) < 18 + 4) {
+                            hit = true;
+                            p.hp -= proj.damage;
+                            io.to(roomId).emit('effect', { type: 'hitTank', x: proj.x, y: proj.y, damage: proj.damage });
+
+                            if (p.hp <= 0) {
+                                if (proj.shooterId === room.p1Id) room.scores.p1++;
+                                if (proj.shooterId === room.p2Id) room.scores.p2++;
+                                room.gameState = "GAMEOVER";
+                                io.to(roomId).emit('gameOver', { winnerId: proj.shooterId });
+                                
+                                setTimeout(() => {
+                                    // Ensure room still exists (they didn't disconnect during the 3 seconds)
+                                    if(activeRooms[roomId] && activeRooms[roomId].gameState === "GAMEOVER") {
+                                        activeRooms[roomId].gameState = "PLAYING";
+                                        resetBoard(activeRooms[roomId]);
+                                        io.to(roomId).emit('gameStart', { trees: activeRooms[roomId].trees, p1Id: room.p1Id, p2Id: room.p2Id });
+                                    }
+                                }, 3000);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                if (hit) room.projectiles.splice(i, 1);
+            }
+
+            // 3. Broadcast State
+            io.to(roomId).emit('stateUpdate', { players: room.players, projectiles: room.projectiles, p1Id: room.p1Id, p2Id: room.p2Id, scores: room.scores });
+        }
     }
-}, 1000 / 30); // 30 Server Ticks per second
+}, 1000 / 60);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Game Server running on port ${PORT}`));
