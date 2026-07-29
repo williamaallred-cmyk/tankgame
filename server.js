@@ -11,21 +11,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Server-Side Tank Configurations (Authoritative Stats)
 const TANK_STATS = {
     // WW1
-    "mkiv": { hp: 4, speed: 1.5, reload: 180, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 12 },
-    "a7v": { hp: 5, speed: 1.2, reload: 200, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 12 },
-    "ft17": { hp: 2, speed: 2.5, reload: 120, damage: 1, range: 350, accuracy: 0.12, turretSpeed: 0.04, projSpeed: 10 },
+    "mkiv": { hp: 4, speed: 1.5, reload: 180, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
+    "a7v": { hp: 5, speed: 1.2, reload: 200, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
+    "ft17": { hp: 2, speed: 2.5, reload: 120, damage: 1, range: 350, accuracy: 0.12, turretSpeed: 0.04, projSpeed: 20 },
     // WW2
-    "m4": { hp: 3, speed: 3.0, reload: 120, damage: 1, range: 600, accuracy: 0.08, turretSpeed: 0.06, projSpeed: 18 },
-    "t34": { hp: 3, speed: 3.2, reload: 110, damage: 1, range: 550, accuracy: 0.10, turretSpeed: 0.05, projSpeed: 18 },
-    "tiger": { hp: 5, speed: 2.0, reload: 160, damage: 2, range: 800, accuracy: 0.04, turretSpeed: 0.03, projSpeed: 22 },
-    "stug": { hp: 4, speed: 2.2, reload: 140, damage: 1.5, range: 700, accuracy: 0.05, turretSpeed: 0.015, projSpeed: 20 },
+    "m4": { hp: 3, speed: 3.0, reload: 120, damage: 1, range: 600, accuracy: 0.08, turretSpeed: 0.06, projSpeed: 36 },
+    "t34": { hp: 3, speed: 3.2, reload: 110, damage: 1, range: 550, accuracy: 0.10, turretSpeed: 0.05, projSpeed: 36 },
+    "tiger": { hp: 5, speed: 2.0, reload: 160, damage: 2, range: 800, accuracy: 0.04, turretSpeed: 0.03, projSpeed: 44 },
+    "stug": { hp: 4, speed: 2.2, reload: 140, damage: 1.5, range: 700, accuracy: 0.05, turretSpeed: 0.015, projSpeed: 40 },
     // Cold War
-    "m48": { hp: 4, speed: 3.5, reload: 100, damage: 1.5, range: 800, accuracy: 0.05, turretSpeed: 0.08, projSpeed: 26 },
-    "t55": { hp: 4, speed: 3.4, reload: 110, damage: 1.5, range: 750, accuracy: 0.06, turretSpeed: 0.07, projSpeed: 25 },
-    "leo1": { hp: 3, speed: 4.5, reload: 90, damage: 1.5, range: 900, accuracy: 0.03, turretSpeed: 0.10, projSpeed: 28 },
+    "m48": { hp: 4, speed: 3.5, reload: 100, damage: 1.5, range: 800, accuracy: 0.05, turretSpeed: 0.08, projSpeed: 52 },
+    "t55": { hp: 4, speed: 3.4, reload: 110, damage: 1.5, range: 750, accuracy: 0.06, turretSpeed: 0.07, projSpeed: 50 },
+    "leo1": { hp: 3, speed: 4.5, reload: 90, damage: 1.5, range: 900, accuracy: 0.03, turretSpeed: 0.10, projSpeed: 56 },
     // Modern
-    "m1a2": { hp: 6, speed: 4.0, reload: 100, damage: 2, range: 1200, accuracy: 0.01, turretSpeed: 0.15, projSpeed: 38 },
-    "t90": { hp: 5, speed: 3.8, reload: 100, damage: 2, range: 1100, accuracy: 0.02, turretSpeed: 0.12, projSpeed: 36 }
+    "m1a2": { hp: 6, speed: 4.0, reload: 100, damage: 2, range: 1200, accuracy: 0.01, turretSpeed: 0.15, projSpeed: 76 },
+    "t90": { hp: 5, speed: 3.8, reload: 100, damage: 2, range: 1100, accuracy: 0.02, turretSpeed: 0.12, projSpeed: 72 }
 };
 
 let activeRooms = {};
