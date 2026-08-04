@@ -39,7 +39,7 @@
         </div>
 
         <div class="flex items-center space-x-3 text-sm flex-1 justify-center">
-            <div class="flex items-center space-x-2 bg-emerald-950/70 px-3 py-1.5 rounded-xl border border-emerald-700/50 w-44">
+            <div class="flex items-center space-x-2 bg-emerald-950/70 px-3 py-1.5 rounded-xl border border-emerald-700/50 w-52">
                 <div class="flex flex-col w-full">
                     <span id="playerTankName" class="text-emerald-400 font-bold text-[10px] truncate">YOU</span>
                     <div class="w-full bg-gray-900 rounded-sm h-3 relative border border-emerald-900 overflow-hidden mt-0.5">
@@ -52,7 +52,7 @@
                 <span id="scoreText" class="font-bold text-amber-400">0 - 0</span>
             </div>
 
-            <div class="flex items-center space-x-2 bg-red-950/70 px-3 py-1.5 rounded-xl border border-red-700/50 w-44">
+            <div class="flex items-center space-x-2 bg-red-950/70 px-3 py-1.5 rounded-xl border border-red-700/50 w-52">
                 <div class="flex flex-col w-full text-right">
                     <span id="enemyTankName" class="text-red-400 font-bold text-[10px] truncate">ENEMY</span>
                     <div class="w-full bg-gray-900 rounded-sm h-3 relative border border-red-900 overflow-hidden mt-0.5 ml-auto">
@@ -75,6 +75,12 @@
             <div class="bg-gray-900 border border-emerald-500/50 p-8 rounded-2xl text-center shadow-2xl max-w-sm w-full mx-4">
                 <h2 class="text-2xl font-black text-emerald-400 mb-2">JOIN MATCH</h2>
                 <p class="text-gray-400 text-xs mb-6">Connect to the server to play.</p>
+                
+                <div class="mb-6 text-left">
+                    <label class="block text-[10px] text-emerald-400 font-bold uppercase mb-1">Callsign</label>
+                    <input type="text" id="usernameInput" maxlength="12" placeholder="Enter Username" class="w-full bg-emerald-950 text-white border border-emerald-700/50 rounded p-2 outline-none">
+                </div>
+
                 <button id="joinBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow-lg glow-green">
                     Connect & Ready Up
                 </button>
@@ -119,12 +125,10 @@
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
         
-        // Visuals only memory
         let clientTanks = {};
         let explosions = [];
         let particles = [];
 
-        // Track Keyboard and Mouse
         const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
 
         select.addEventListener('change', (e) => {
@@ -168,7 +172,11 @@
 
                 socket.on('connect', () => {
                     document.getElementById('lobbyStatus').innerText = "Waiting for Opponent...";
-                    socket.emit('join', select.value);
+                    // Send both tank choice and username to the server
+                    socket.emit('join', { 
+                        tankId: select.value, 
+                        username: document.getElementById('usernameInput').value 
+                    });
                 });
 
                 socket.on('init', (id) => { myId = id; });
@@ -228,7 +236,6 @@
                     }
                 });
 
-                // Send inputs rapidly for smooth server movement
                 setInterval(() => {
                     if (myId) socket.emit('input', inputs);
                 }, 1000 / 60);
@@ -256,7 +263,9 @@
             const enemy = enemyId ? serverState.players[enemyId] : null;
 
             document.getElementById('playerHpBar').style.width = Math.max(0, (me.hp / me.maxHp) * 100) + '%';
-            document.getElementById('playerTankName').innerText = getTankName(me.tankTypeId);
+            
+            // Format Username and Tank type together
+            document.getElementById('playerTankName').innerText = `${me.username.toUpperCase()} (${getTankName(me.tankTypeId)})`;
             
             const cdEl = document.getElementById('cooldownStatus');
             if (me.reloadCooldown <= 0) {
@@ -269,7 +278,7 @@
 
             if (enemy) {
                 document.getElementById('enemyHpBar').style.width = Math.max(0, (enemy.hp / enemy.maxHp) * 100) + '%';
-                document.getElementById('enemyTankName').innerText = getTankName(enemy.tankTypeId);
+                document.getElementById('enemyTankName').innerText = `${enemy.username.toUpperCase()} (${getTankName(enemy.tankTypeId)})`;
             } else {
                 document.getElementById('enemyHpBar').style.width = '0%';
                 document.getElementById('enemyTankName').innerText = "WAITING...";
@@ -314,6 +323,12 @@
             ctx.fillStyle = trackColor;
             ctx.fillRect(0, -4, 26, 8);
             ctx.restore();
+            
+            // Draw Username tag above tank
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = 'bold 10px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(p.username.toUpperCase(), 0, -35);
         }
 
         let frameCount = 0;
@@ -321,16 +336,14 @@
             frameCount++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Tactical Map Grid
             ctx.strokeStyle = 'rgba(74, 222, 128, 0.05)';
             ctx.lineWidth = 1;
             for (let x = 0; x <= canvas.width; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
             for (let y = 0; y <= canvas.height; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
             ctx.fillStyle = 'rgba(74, 222, 128, 0.15)'; ctx.font = 'bold 10px Inter'; ctx.fillText("GRID SCALE: 100m", 15, canvas.height - 15);
 
-            // Client-Side Aimbot logic
             if (inputs.shift && myId && serverState.players[myId]) {
-                const stabTanks = ['m4', 'm48', 't55', 'leo1', 'm1a2', 't90'];
+                const stabTanks = ['m48', 't55', 'leo1', 'm1a2', 't90'];
                 let me = serverState.players[myId];
                 if (stabTanks.includes(me.tankTypeId)) {
                     let enemyId = serverState.p1Id === myId ? serverState.p2Id : serverState.p1Id;
@@ -351,7 +364,6 @@
 
             trees.forEach(tree => drawTree(ctx, tree, frameCount));
 
-            // Smooth Interpolation Drawing
             for (let id in serverState.players) {
                 let p = serverState.players[id];
                 if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
