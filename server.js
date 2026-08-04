@@ -5,10 +5,12 @@ const server = http.createServer(app);
 const { Server } = require("socket.io");
 const io = new Server(server);
 const path = require('path');
+const filter = require('leo-profanity');
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Server-Side Tank Configurations (Authoritative Stats)
+// Projectile speeds are doubled for realism
 const TANK_STATS = {
     // WW1
     "mkiv": { hp: 4, speed: 1.5, reload: 180, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
@@ -35,10 +37,10 @@ function dist(x1, y1, x2, y2) {
     return Math.hypot(x2 - x1, y2 - y1);
 }
 
-function createPlayer(id, tankId) {
+function createPlayer(id, tankId, username) {
     return {
         x: -1000, y: -1000, angle: 0, turretAngle: 0, hp: 0, maxHp: 0, 
-        reloadCooldown: 0, tankTypeId: tankId || 'm4',
+        reloadCooldown: 0, tankTypeId: tankId || 'm4', username: username,
         inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false }
     };
 }
@@ -88,11 +90,15 @@ io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
     // Player attempts to join matchmaking
-    socket.on('join', (tankId) => {
-        // Prevent double joining
+    socket.on('join', (data) => {
         if (socket.roomId || waitingSockets.includes(socket)) return;
 
-        socket.tankId = tankId || 'm4';
+        // Clean the username with the profanity filter, fallback to 'Guest' if empty
+        let rawName = data.username ? data.username.trim() : "";
+        if (rawName === "") rawName = "Guest";
+        
+        socket.tankId = data.tankId || 'm4';
+        socket.username = filter.clean(rawName); 
 
         // Check for a valid waiting opponent
         let opponent = null;
@@ -126,8 +132,8 @@ io.on('connection', (socket) => {
                 scores: { p1: 0, p2: 0 }
             };
 
-            room.players[opponent.id] = createPlayer(opponent.id, opponent.tankId);
-            room.players[socket.id] = createPlayer(socket.id, socket.tankId);
+            room.players[opponent.id] = createPlayer(opponent.id, opponent.tankId, opponent.username);
+            room.players[socket.id] = createPlayer(socket.id, socket.tankId, socket.username);
             
             activeRooms[roomId] = room;
             resetBoard(room);
@@ -295,7 +301,7 @@ setInterval(() => {
                                 io.to(roomId).emit('gameOver', { winnerId: proj.shooterId });
                                 
                                 setTimeout(() => {
-                                    // Ensure room still exists (they didn't disconnect during the 3 seconds)
+                                    // Ensure room still exists (they didn't disconnect)
                                     if(activeRooms[roomId] && activeRooms[roomId].gameState === "GAMEOVER") {
                                         activeRooms[roomId].gameState = "PLAYING";
                                         resetBoard(activeRooms[roomId]);
