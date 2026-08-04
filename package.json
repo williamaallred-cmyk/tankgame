@@ -1,13 +1,14 @@
 {
 "name": "tank-duel-multiplayer",
 "version": "1.0.0",
-"description": "1v1 Multiplayer Tank Game",
+"description": "1v1 Multiplayer Server-Authoritative Tank Game",
 "main": "server.js",
 "scripts": {
 "start": "node server.js"
 },
 "dependencies": {
 "express": "^4.18.2",
-"socket.io": "^4.7.2"
+"socket.io": "^4.7.2",
+"leo-profanity": "^3.4.0"
 }
 }
