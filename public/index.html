@@ -7,20 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0d160d; font-family: 'Inter', sans-serif; user-select: none; }
-        
         main { display: flex; align-items: center; justify-content: center; height: calc(100vh - 74px); width: 100vw; }
-
-        canvas {
-            background: #111;
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
+        canvas { background: #111; width: 100%; height: 100%; display: block; }
         
         .glow-green { box-shadow: 0 0 25px rgba(74, 222, 128, 0.4); }
         .hud-panel { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(16, 185, 129, 0.3); }
         
-        /* Custom scrollbars */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #059669; border-radius: 10px; }
@@ -37,7 +29,6 @@
         </div>
 
         <div class="flex items-center space-x-4 text-sm flex-1 justify-center">
-            <!-- Dynamic Room Code Display -->
             <div id="roomCodeDisplay" class="hidden bg-gray-800/80 px-4 py-1.5 rounded-lg border border-gray-700 text-xs text-center shrink-0">
                 ROOM CODE: <span id="roomCodeText" class="font-black text-white tracking-widest">----</span>
             </div>
@@ -49,10 +40,8 @@
     </header>
 
     <main class="relative cursor-crosshair">
-        <!-- Full Screen Dynamic Canvas -->
         <canvas id="simCanvas"></canvas>
         
-        <!-- UI: Personal HUD -->
         <div id="personalHud" class="absolute bottom-6 left-6 hud-panel p-4 rounded-xl hidden w-64 shadow-2xl">
             <div class="flex justify-between items-end mb-2">
                 <span id="playerTankName" class="text-emerald-400 font-black text-sm truncate uppercase tracking-wide">YOU</span>
@@ -61,38 +50,25 @@
             <div class="w-full bg-gray-900 rounded h-4 relative border border-emerald-900 overflow-hidden shadow-inner mb-2">
                 <div id="playerHpBar" class="bg-emerald-500 h-full w-full transition-all duration-200" style="width: 100%"></div>
             </div>
-            <!-- Status Effects Container -->
             <div id="playerDebuffs" class="flex space-x-1 mt-1 empty:hidden h-4"></div>
         </div>
 
-        <!-- UI: Leaderboard -->
         <div id="leaderboardHud" class="absolute top-6 right-6 hud-panel p-4 rounded-xl hidden w-56 shadow-2xl">
             <h3 class="text-xs font-black text-emerald-500 uppercase tracking-widest border-b border-emerald-800/50 pb-2 mb-2">Leaderboard (First to 10)</h3>
-            <ul id="leaderboardList" class="space-y-1 max-h-48 overflow-y-auto">
-                <!-- Injected via JS -->
-            </ul>
+            <ul id="leaderboardList" class="space-y-1 max-h-48 overflow-y-auto"></ul>
         </div>
 
-        <!-- UI: Killfeed Notifications -->
-        <div id="killfeed" class="absolute top-6 left-1/2 transform -translate-x-1/2 space-y-1 pointer-events-none z-40 flex flex-col items-center">
-            <!-- Injected via JS -->
-        </div>
+        <div id="killfeed" class="absolute top-6 left-1/2 transform -translate-x-1/2 space-y-1 pointer-events-none z-40 flex flex-col items-center"></div>
         
-        <!-- Multiplayer Connection Lobby -->
         <div id="lobbyModal" class="absolute inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-40 overflow-y-auto p-4">
             <div class="bg-gray-900 border border-emerald-500/50 p-6 rounded-2xl shadow-2xl max-w-4xl w-full">
-                
-                <!-- Lobby Header -->
                 <div class="mb-6 pb-6 border-b border-gray-800 text-center">
                     <h2 class="text-3xl font-black text-emerald-400 mb-1 drop-shadow-md">TANK DUEL ONLINE</h2>
                     <p class="text-gray-400 text-xs">Global Multiplayer Server</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    
-                    <!-- Left Column: Player Setup & Room Creation -->
                     <div class="space-y-6">
-                        <!-- Player Setup -->
                         <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
                             <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">1. Operator Setup</h3>
                             <div class="space-y-3">
@@ -107,7 +83,6 @@
                             </div>
                         </div>
 
-                        <!-- Create Room -->
                         <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
                             <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">2. Create Match</h3>
                             <div class="space-y-3">
@@ -144,31 +119,24 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: Server Browser & Join Private -->
                     <div class="flex flex-col space-y-6">
-                        
-                        <!-- Public Server Browser -->
                         <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 flex-1 flex flex-col">
                             <div class="flex justify-between items-center mb-3 border-b border-emerald-900 pb-1">
                                 <h3 class="text-emerald-500 font-bold text-xs uppercase">Public Matches</h3>
                                 <button id="refreshBrowserBtn" class="text-[10px] text-gray-400 hover:text-white transition uppercase font-bold">Refresh</button>
                             </div>
-                            
                             <div class="flex-1 bg-gray-950 rounded border border-gray-700 overflow-hidden flex flex-col min-h-[160px]">
-                                <!-- Header Row -->
                                 <div class="grid grid-cols-12 gap-2 p-2 bg-gray-900 text-[10px] text-gray-400 font-bold uppercase border-b border-gray-800">
                                     <div class="col-span-6">Room Name</div>
                                     <div class="col-span-3 text-center">Players</div>
                                     <div class="col-span-3"></div>
                                 </div>
-                                <!-- Room List -->
                                 <div id="serverBrowserList" class="overflow-y-auto flex-1 p-1">
                                     <div class="text-center text-gray-500 text-xs mt-4">Connecting to matchmaking server...</div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Join Private Match -->
                         <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
                             <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">Join Private Match</h3>
                             <div class="flex space-x-2">
@@ -182,7 +150,6 @@
                     </div>
                 </div>
 
-                <!-- Status Messages -->
                 <div class="mt-4 h-6 text-center">
                     <p id="lobbyStatus" class="text-amber-400 text-sm font-bold hidden animate-pulse"></p>
                     <p id="lobbyError" class="text-red-500 text-sm font-bold hidden"></p>
@@ -190,7 +157,6 @@
             </div>
         </div>
         
-        <!-- Game Over UI -->
         <div id="gameOverModal" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30 hidden backdrop-blur-sm">
             <h2 class="text-6xl font-black mb-2 drop-shadow-lg tracking-widest text-emerald-400">MATCH OVER</h2>
             <p id="winnerText" class="text-white text-2xl font-bold mb-8">Someone won the match!</p>
@@ -198,11 +164,8 @@
         </div>
     </main>
 
-    <!-- Socket.io Script Injection -->
     <script src="/socket.io/socket.io.js"></script>
-    
     <script>
-        // TANK DATA for UI
         const TANK_DATA = {
             "WW1": [{ id: "mkiv", name: "Mark IV" }, { id: "a7v", name: "A7V" }, { id: "ft17", name: "Renault FT" }],
             "WW2": [{ id: "m4", name: "M4 Sherman" }, { id: "t34", name: "T-34" }, { id: "tiger", name: "Tiger I" }, { id: "stug", name: "StuG III" }],
@@ -210,10 +173,25 @@
             "Modern Era": [{ id: "m1a2", name: "M1A2 Abrams" }, { id: "t90", name: "T-90" }]
         };
 
+        // Real-life relative dimensions (w = Width, l = Length, t = Turret Radius, b = Barrel Length)
+        const TANK_DIMS = {
+            "mkiv":  { w: 22, l: 42, t: 0,  b: 15 },
+            "a7v":   { w: 20, l: 38, t: 0,  b: 15 },
+            "ft17":  { w: 12, l: 22, t: 7,  b: 14 },
+            "m4":    { w: 18, l: 30, t: 10, b: 20 },
+            "t34":   { w: 18, l: 32, t: 10, b: 22 },
+            "tiger": { w: 22, l: 36, t: 12, b: 24 },
+            "stug":  { w: 20, l: 30, t: 0,  b: 20 },
+            "m48":   { w: 21, l: 34, t: 11, b: 24 },
+            "t55":   { w: 20, l: 34, t: 11, b: 26 },
+            "leo1":  { w: 20, l: 36, t: 11, b: 28 },
+            "m1a2":  { w: 22, l: 40, t: 13, b: 32 },
+            "t90":   { w: 21, l: 38, t: 11, b: 30 }
+        };
+
         const WORLD_WIDTH = 2400;
         const WORLD_HEIGHT = 1600;
 
-        // Populate Dropdowns
         const select = document.getElementById('tankSelect');
         const headerSelect = document.getElementById('headerTankSelect');
         let html = '';
@@ -228,39 +206,25 @@
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
         
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight - 74;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight - 74; }
+        window.addEventListener('resize', resizeCanvas); resizeCanvas();
         
-        // Multiplayer State
-        let socket = io(); // Connect immediately to fetch server browser list
+        let socket = io();
         let myId = null;
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
-        let clientTanks = {}; // For Interpolation
+        let clientTanks = {};
         
-        // Visual effects & Camera
-        let explosions = [];
-        let particles = [];
-        let floatingTexts = [];
-        let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2 };
-        let zoom = 1.0;
-
-        // Input State
+        let explosions = []; let particles = []; let floatingTexts = [];
+        let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2 }; let zoom = 1.0;
         const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
         let screenMouseX = 0; let screenMouseY = 0;
 
         socket.on('init', (id) => { myId = id; requestRooms(); });
-
+        
         socket.on('publicRoomsList', (rooms) => {
             const listEl = document.getElementById('serverBrowserList');
-            if (rooms.length === 0) {
-                listEl.innerHTML = `<div class="text-center text-gray-500 text-xs mt-4">No active public matches found.</div>`;
-                return;
-            }
+            if (rooms.length === 0) return listEl.innerHTML = `<div class="text-center text-gray-500 text-xs mt-4">No active public matches found.</div>`;
             
             let domHtml = '';
             rooms.forEach(r => {
@@ -268,13 +232,7 @@
                 let btnHtml = isFull 
                     ? `<button disabled class="w-full bg-gray-700 text-gray-500 text-[10px] font-bold py-1 rounded cursor-not-allowed">FULL</button>`
                     : `<button onclick="joinPublicRoom('${r.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 rounded transition">JOIN</button>`;
-                
-                domHtml += `
-                    <div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded">
-                        <div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}</div>
-                        <div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div>
-                        <div class="col-span-3">${btnHtml}</div>
-                    </div>`;
+                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
             });
             listEl.innerHTML = domHtml;
         });
@@ -282,36 +240,23 @@
         socket.on('gameStart', (data) => {
             document.getElementById('lobbyModal').classList.add('hidden');
             document.getElementById('gameOverModal').classList.add('hidden');
-            
             document.getElementById('headerTitle').innerText = data.roomName;
             document.getElementById('roomCodeDisplay').classList.remove('hidden');
             document.getElementById('roomCodeText').innerText = data.roomId;
             document.getElementById('headerTankSelect').classList.remove('hidden');
             document.getElementById('personalHud').classList.remove('hidden');
             document.getElementById('leaderboardHud').classList.remove('hidden');
-            
-            trees = data.trees;
-            explosions = []; particles = []; floatingTexts = [];
+            trees = data.trees; explosions = []; particles = []; floatingTexts = [];
         });
 
-        socket.on('stateUpdate', (data) => {
-            serverState = data;
-            updateHUD();
-        });
-
-        socket.on('lobbyError', (msg) => {
-            document.getElementById('lobbyStatus').classList.add('hidden');
-            document.getElementById('lobbyError').classList.remove('hidden');
-            document.getElementById('lobbyError').innerText = msg;
-        });
+        socket.on('stateUpdate', (data) => { serverState = data; updateHUD(); });
+        socket.on('lobbyError', (msg) => { document.getElementById('lobbyStatus').classList.add('hidden'); document.getElementById('lobbyError').classList.remove('hidden'); document.getElementById('lobbyError').innerText = msg; });
 
         socket.on('killfeed', (data) => {
-            const feed = document.getElementById('killfeed');
-            const msg = document.createElement('div');
+            const feed = document.getElementById('killfeed'); const msg = document.createElement('div');
             msg.className = "bg-gray-900/80 border border-gray-700 px-4 py-1.5 rounded text-xs font-bold shadow-lg animate-bounce text-center";
             msg.innerHTML = `<span class="text-emerald-400">${data.killer}</span> <span class="text-gray-400 text-[10px] mx-1">DESTROYED</span> <span class="text-red-400">${data.victim}</span>`;
-            feed.appendChild(msg);
-            setTimeout(() => feed.removeChild(msg), 3500);
+            feed.appendChild(msg); setTimeout(() => feed.removeChild(msg), 3500);
         });
 
         socket.on('gameOver', (data) => {
@@ -328,83 +273,41 @@
                 for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
             } else if (data.type === 'hitTank') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
-                
-                // Limit particles based on damage
-                let particleCount = Math.min(30, Math.max(10, Math.floor(data.damage / 10)));
-                for (let i = 0; i < particleCount; i++) {
-                    particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
-                }
-                
-                // Spawn floating damage text
+                let pCount = Math.min(30, Math.max(10, Math.floor(data.damage / 10)));
+                for (let i = 0; i < pCount; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
                 floatingTexts.push({ x: data.x, y: data.y, text: "-" + data.damage, color: '#fca5a5', life: 45, offset: 0 });
-                if (data.critText) {
-                    floatingTexts.push({ x: data.x, y: data.y - 15, text: data.critText, color: '#fbbf24', life: 75, offset: 0 });
-                }
+                if (data.critText) floatingTexts.push({ x: data.x, y: data.y - 15, text: data.critText, color: '#fbbf24', life: 75, offset: 0 });
             }
         });
 
-        function requestRooms() {
-            if (!document.getElementById('lobbyModal').classList.contains('hidden')) {
-                socket.emit('requestPublicRooms');
-            }
-        }
-        setInterval(requestRooms, 5000); // Poll every 5s while in lobby
+        function requestRooms() { if (!document.getElementById('lobbyModal').classList.contains('hidden')) socket.emit('requestPublicRooms'); }
+        setInterval(requestRooms, 5000); 
         document.getElementById('refreshBrowserBtn').addEventListener('click', requestRooms);
 
-        // Toggle password field for Create Room
         document.getElementById('privacySelect').addEventListener('change', (e) => {
-            const passContainer = document.getElementById('createPasswordContainer');
-            if (e.target.value === 'private') passContainer.classList.remove('hidden');
-            else passContainer.classList.add('hidden');
+            const pc = document.getElementById('createPasswordContainer');
+            if (e.target.value === 'private') pc.classList.remove('hidden'); else pc.classList.add('hidden');
         });
 
-        function showLoading(msg) {
-            document.getElementById('lobbyStatus').classList.remove('hidden');
-            document.getElementById('lobbyError').classList.add('hidden');
-            document.getElementById('lobbyStatus').innerText = msg;
-        }
+        function showLoading(msg) { document.getElementById('lobbyStatus').classList.remove('hidden'); document.getElementById('lobbyError').classList.add('hidden'); document.getElementById('lobbyStatus').innerText = msg; }
 
-        // Global function for browser Join buttons
         window.joinPublicRoom = function(roomId) {
             showLoading("Joining server...");
-            socket.emit('joinRoom', { 
-                tankId: document.getElementById('tankSelect').value, 
-                username: document.getElementById('usernameInput').value,
-                roomId: roomId,
-                password: "" // Public rooms don't need a password
-            });
+            socket.emit('joinRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomId: roomId, password: "" });
         };
 
-        // Create Room Button
         document.getElementById('createBtn').addEventListener('click', () => {
             showLoading("Creating server...");
-            socket.emit('createRoom', { 
-                tankId: document.getElementById('tankSelect').value, 
-                username: document.getElementById('usernameInput').value,
-                roomName: document.getElementById('createRoomName').value,
-                maxPlayers: document.getElementById('maxPlayersInput').value,
-                isPrivate: document.getElementById('privacySelect').value,
-                password: document.getElementById('createPassword').value
-            });
+            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value });
         });
 
-        // Join Private Button
         document.getElementById('joinPrivateBtn').addEventListener('click', () => {
-            let code = document.getElementById('joinRoomCode').value;
-            if(!code) return;
+            let code = document.getElementById('joinRoomCode').value; if(!code) return;
             showLoading("Verifying private room...");
-            socket.emit('joinRoom', { 
-                tankId: document.getElementById('tankSelect').value, 
-                username: document.getElementById('usernameInput').value,
-                roomId: code,
-                password: document.getElementById('joinPassword').value
-            });
+            socket.emit('joinRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomId: code, password: document.getElementById('joinPassword').value });
         });
 
-        // Change Tank Mid-Game
-        headerSelect.addEventListener('change', (e) => {
-            if (socket && socket.connected) socket.emit('changeTank', e.target.value);
-        });
+        headerSelect.addEventListener('change', (e) => { if (socket && socket.connected) socket.emit('changeTank', e.target.value); });
 
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -433,7 +336,6 @@
         canvas.addEventListener('mousedown', (e) => { if (e.button === 0) inputs.mouseDown = true; });
         canvas.addEventListener('mouseup', (e) => { if (e.button === 0) inputs.mouseDown = false; });
 
-        // Emit inputs 60 times a second
         setInterval(() => {
             if (myId && document.getElementById('lobbyModal').classList.contains('hidden')) {
                 inputs.mouseX = camera.x + (screenMouseX - canvas.width / 2) / zoom;
@@ -443,11 +345,7 @@
         }, 1000 / 60);
 
         function getTankName(id) {
-            for (let era in TANK_DATA) {
-                let match = TANK_DATA[era].find(t => t.id === id);
-                if (match) return match.name;
-            }
-            return "TANK";
+            for (let era in TANK_DATA) { let m = TANK_DATA[era].find(t => t.id === id); if (m) return m.name; } return "TANK";
         }
 
         function updateHUD() {
@@ -457,7 +355,6 @@
             document.getElementById('playerHpBar').style.width = Math.max(0, (me.hp / me.maxHp) * 100) + '%';
             document.getElementById('playerTankName').innerText = me.username + ` (${getTankName(me.tankTypeId)})`;
             
-            // Render Debuff Status UI
             let debuffHtml = '';
             if (me.debuffs) {
                 if (me.debuffs.track > 0) debuffHtml += `<span class="bg-red-900 text-red-100 text-[8px] px-1 rounded border border-red-500 font-bold uppercase">TRACKS</span>`;
@@ -471,15 +368,11 @@
             if (me.reloadCooldown <= 0) { cdEl.innerText = "READY"; cdEl.className = "text-emerald-300 font-black"; } 
             else { cdEl.innerText = "RELOADING"; cdEl.className = "text-amber-500"; }
 
-            let sortedPlayers = Object.values(serverState.players).sort((a, b) => b.kills - a.kills);
+            let sorted = Object.values(serverState.players).sort((a, b) => b.kills - a.kills);
             let lbHtml = '';
-            sortedPlayers.forEach(p => {
-                let isMe = p.id === myId;
-                let textColor = isMe ? 'text-emerald-300 font-bold' : 'text-gray-300';
-                lbHtml += `<li class="flex justify-between text-xs items-center p-1 ${isMe ? 'bg-emerald-900/30 rounded' : ''}">
-                    <span class="${textColor} truncate max-w-[120px]">${p.username}</span>
-                    <span class="text-amber-400 font-black">${p.kills} <span class="text-[9px] text-gray-500 font-normal">K</span></span>
-                </li>`;
+            sorted.forEach(p => {
+                let isMe = p.id === myId; let textColor = isMe ? 'text-emerald-300 font-bold' : 'text-gray-300';
+                lbHtml += `<li class="flex justify-between text-xs items-center p-1 ${isMe ? 'bg-emerald-900/30 rounded' : ''}"><span class="${textColor} truncate max-w-[120px]">${p.username}</span><span class="text-amber-400 font-black">${p.kills} <span class="text-[9px] text-gray-500 font-normal">K</span></span></li>`;
             });
             document.getElementById('leaderboardList').innerHTML = lbHtml;
         }
@@ -487,14 +380,9 @@
         function drawTree(ctx, tree, time) {
             ctx.save();
             const sway = Math.sin(time * 0.002 + tree.swayOffset) * 2;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-            ctx.beginPath(); ctx.arc(tree.x, tree.y + 4, tree.radius * 0.8, 0, Math.PI * 2); ctx.fill();
-            
-            ctx.fillStyle = '#1e3f20';
-            ctx.beginPath(); ctx.moveTo(tree.x + sway, tree.y - tree.radius * 1.5); ctx.lineTo(tree.x - tree.radius + sway*0.5, tree.y + tree.radius); ctx.lineTo(tree.x + tree.radius + sway*0.5, tree.y + tree.radius); ctx.closePath(); ctx.fill();
-            
-            ctx.fillStyle = '#2d5a27';
-            ctx.beginPath(); ctx.moveTo(tree.x + sway*0.8, tree.y - tree.radius * 1.1); ctx.lineTo(tree.x - tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.lineTo(tree.x + tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(tree.x, tree.y + 4, tree.radius * 0.8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#1e3f20'; ctx.beginPath(); ctx.moveTo(tree.x + sway, tree.y - tree.radius * 1.5); ctx.lineTo(tree.x - tree.radius + sway*0.5, tree.y + tree.radius); ctx.lineTo(tree.x + tree.radius + sway*0.5, tree.y + tree.radius); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#2d5a27'; ctx.beginPath(); ctx.moveTo(tree.x + sway*0.8, tree.y - tree.radius * 1.1); ctx.lineTo(tree.x - tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.lineTo(tree.x + tree.radius * 0.7 + sway*0.4, tree.y + tree.radius * 0.5); ctx.closePath(); ctx.fill();
             ctx.restore();
         }
 
@@ -505,31 +393,36 @@
             const trackColor = isMe ? '#052e16' : '#450a0a';
             const turretColor = isMe ? '#15803d' : '#b91c1c';
 
+            const dim = TANK_DIMS[p.tankTypeId] || { w: 18, l: 30, t: 11, b: 24 };
+
             ctx.save();
             ctx.rotate(p.angle);
             ctx.fillStyle = trackColor;
-            ctx.fillRect(-18, -20, 36, 10); ctx.fillRect(-18, 10, 36, 10);
+            ctx.fillRect(-dim.l/2 - 2, -dim.w/2 - 4, dim.l + 4, 6); 
+            ctx.fillRect(-dim.l/2 - 2, dim.w/2 - 2, dim.l + 4, 6);
             ctx.fillStyle = color;
-            ctx.fillRect(-15, -13, 30, 26);
+            ctx.fillRect(-dim.l/2, -dim.w/2, dim.l, dim.w);
             ctx.restore();
 
-            ctx.save(); // FIXED: Added this missing save() command!
+            ctx.save(); 
             ctx.rotate(p.turretAngle);
             ctx.fillStyle = turretColor;
-            ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
-            ctx.lineWidth = 2; ctx.strokeStyle = trackColor; ctx.stroke();
-            ctx.fillStyle = trackColor; ctx.fillRect(0, -4, 26, 8);
+            
+            if (dim.t > 0) {
+                ctx.beginPath(); ctx.arc(0, 0, dim.t, 0, Math.PI * 2); ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = trackColor; ctx.stroke();
+            }
+            
+            ctx.fillStyle = trackColor; 
+            ctx.fillRect(0, -2, dim.b, 4); 
             ctx.restore(); 
             
-            // Draw floating username
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
-            ctx.fillText(p.username, 0, -35);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
+            ctx.fillText(p.username, 0, -dim.w/2 - 18);
 
-            // Enemy HP Bar
             if (!isMe) {
-                ctx.fillStyle = '#111'; ctx.fillRect(-15, -28, 30, 4);
-                ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, -28, 30 * (p.hp / p.maxHp), 4);
+                ctx.fillStyle = '#111'; ctx.fillRect(-15, -dim.w/2 - 13, 30, 4);
+                ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, -dim.w/2 - 13, 30 * (p.hp / p.maxHp), 4);
             }
             ctx.restore();
         }
@@ -542,26 +435,19 @@
             if (myId && serverState.players[myId]) {
                 let me = serverState.players[myId];
                 if (me.hp > 0) {
-                    camera.x += (me.x - camera.x) * 0.1;
-                    camera.y += (me.y - camera.y) * 0.1;
+                    camera.x += (me.x - camera.x) * 0.1; camera.y += (me.y - camera.y) * 0.1;
                 }
             }
 
             ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.scale(zoom, zoom);
-            ctx.translate(-camera.x, -camera.y);
+            ctx.translate(canvas.width / 2, canvas.height / 2); ctx.scale(zoom, zoom); ctx.translate(-camera.x, -camera.y);
 
-            ctx.fillStyle = '#0d160d';
-            ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            ctx.fillStyle = '#0d160d'; ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
             
-            ctx.strokeStyle = 'rgba(74, 222, 128, 0.05)';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(74, 222, 128, 0.05)'; ctx.lineWidth = 1;
             for (let x = 0; x <= WORLD_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_HEIGHT); ctx.stroke(); }
             for (let y = 0; y <= WORLD_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_WIDTH, y); ctx.stroke(); }
-            
-            ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; ctx.lineWidth = 4;
-            ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
             if (inputs.shift && myId && serverState.players[myId]) {
                 const stabTanks = ['m48', 't55', 'leo1', 'm1a2', 't90'];
@@ -570,22 +456,15 @@
                     let closest = null; let minDist = Infinity;
                     for (let id in serverState.players) {
                         if (id !== myId && serverState.players[id].hp > 0) {
-                            let enemy = serverState.players[id];
-                            let d = Math.hypot(me.x - enemy.x, me.y - enemy.y);
+                            let enemy = serverState.players[id]; let d = Math.hypot(me.x - enemy.x, me.y - enemy.y);
                             if (d < minDist) { minDist = d; closest = enemy; }
                         }
                     }
                     if (closest) {
-                        screenMouseX = (closest.x - camera.x) * zoom + canvas.width / 2;
-                        screenMouseY = (closest.y - camera.y) * zoom + canvas.height / 2;
-                        
+                        screenMouseX = (closest.x - camera.x) * zoom + canvas.width / 2; screenMouseY = (closest.y - camera.y) * zoom + canvas.height / 2;
                         ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)'; ctx.lineWidth = 2;
                         ctx.beginPath(); ctx.arc(closest.x, closest.y, 25, 0, Math.PI * 2); ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(closest.x - 35, closest.y); ctx.lineTo(closest.x - 15, closest.y);
-                        ctx.moveTo(closest.x + 35, closest.y); ctx.lineTo(closest.x + 15, closest.y);
-                        ctx.moveTo(closest.x, closest.y - 35); ctx.lineTo(closest.x, closest.y - 15);
-                        ctx.moveTo(closest.x, closest.y + 35); ctx.lineTo(closest.x, closest.y + 15); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(closest.x - 35, closest.y); ctx.lineTo(closest.x - 15, closest.y); ctx.moveTo(closest.x + 35, closest.y); ctx.lineTo(closest.x + 15, closest.y); ctx.moveTo(closest.x, closest.y - 35); ctx.lineTo(closest.x, closest.y - 15); ctx.moveTo(closest.x, closest.y + 35); ctx.lineTo(closest.x, closest.y + 15); ctx.stroke();
                     }
                 }
             }
@@ -596,7 +475,6 @@
                 let p = serverState.players[id];
                 if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
                 
-                // Client-side interpolation to smooth out server latency
                 if (!clientTanks[id]) clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
                 let ct = clientTanks[id];
                 
@@ -611,9 +489,7 @@
             }
 
             ctx.fillStyle = '#fef08a';
-            serverState.projectiles.forEach(p => {
-                ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-            });
+            serverState.projectiles.forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill(); });
 
             explosions.forEach(exp => {
                 exp.radius += 2.2; exp.alpha -= 0.07;
@@ -629,19 +505,12 @@
             });
             particles = particles.filter(pt => pt.life > 0);
 
-            // Draw Floating Combat Text (Damage / Crits)
-            ctx.font = '900 14px Inter';
-            ctx.textAlign = 'center';
+            ctx.font = '900 14px Inter'; ctx.textAlign = 'center';
             floatingTexts.forEach(ft => {
-                ft.life--;
-                ft.offset += 0.5;
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, Math.min(1, ft.life / 30));
-                ctx.fillStyle = '#000'; 
-                ctx.fillText(ft.text, ft.x + 1, ft.y - ft.offset + 1);
-                ctx.fillStyle = ft.color;
-                ctx.fillText(ft.text, ft.x, ft.y - ft.offset);
-                ctx.restore();
+                ft.life--; ft.offset += 0.5;
+                ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, ft.life / 30));
+                ctx.fillStyle = '#000'; ctx.fillText(ft.text, ft.x + 1, ft.y - ft.offset + 1);
+                ctx.fillStyle = ft.color; ctx.fillText(ft.text, ft.x, ft.y - ft.offset); ctx.restore();
             });
             floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
