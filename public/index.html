@@ -513,12 +513,13 @@
             ctx.fillRect(-15, -13, 30, 26);
             ctx.restore();
 
+            ctx.save(); // FIXED: Added this missing save() command!
             ctx.rotate(p.turretAngle);
             ctx.fillStyle = turretColor;
             ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
             ctx.lineWidth = 2; ctx.strokeStyle = trackColor; ctx.stroke();
             ctx.fillStyle = trackColor; ctx.fillRect(0, -4, 26, 8);
-            ctx.restore();
+            ctx.restore(); 
             
             // Draw floating username
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
