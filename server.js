@@ -8,7 +8,7 @@ const path = require('path');
 
 // Initialize the profanity filter
 const filter = require('leo-profanity');
-filter.loadDictionary('en');
+filter.loadDictionary('en'); // Force English dictionary load
 
 // Custom blacklist for tricky names
 const customBadWords = ['fucku', 'fuku', 'b1tch', 'bitch', 'asshole', 'sh1t', 'cunt', 'n1gga', 'nigga'];
@@ -99,12 +99,29 @@ function resetBoard(room) {
 io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
-    function cleanUsername(rawName) {
-        let name = rawName ? rawName.trim() : "";
-        if (name === "") return "Guest";
-        if (filter.check(name)) return "TrollTank";
-        return filter.clean(name);
+    function cleanString(rawStr, fallback, isName = false) {
+        let str = rawStr ? rawStr.trim() : "";
+        if (str === "") return fallback;
+        if (isName && filter.check(str)) return "TrollTank";
+        return isName ? filter.clean(str) : str;
     }
+
+    // Client requests the list of active public rooms
+    socket.on('requestPublicRooms', () => {
+        let publicRooms = [];
+        for (let roomId in activeRooms) {
+            let room = activeRooms[roomId];
+            if (!room.isPrivate && room.gameState !== "GAMEOVER") {
+                publicRooms.push({
+                    id: room.id,
+                    name: room.name,
+                    playerCount: Object.keys(room.players).length,
+                    maxPlayers: room.maxPlayers
+                });
+            }
+        }
+        socket.emit('publicRoomsList', publicRooms);
+    });
 
     socket.on('createRoom', (data) => {
         if (socket.roomId) return;
@@ -119,6 +136,9 @@ io.on('connection', (socket) => {
 
         let room = {
             id: roomId,
+            name: cleanString(data.roomName, `${cleanString(data.username, "Guest", true)}'s Match`),
+            isPrivate: data.isPrivate === 'private',
+            password: data.password || "",
             maxPlayers: maxP,
             players: {},
             projectiles: [],
@@ -126,13 +146,13 @@ io.on('connection', (socket) => {
             gameState: "PLAYING"
         };
         
-        let username = cleanUsername(data.username);
+        let username = cleanString(data.username, "Guest", true);
         room.players[socket.id] = createPlayer(socket.id, data.tankId, username);
         
         activeRooms[roomId] = room;
         resetBoard(room);
 
-        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: maxP });
+        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: maxP, roomName: room.name });
     });
 
     socket.on('joinRoom', (data) => {
@@ -145,6 +165,11 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (room.isPrivate && room.password !== data.password) {
+            socket.emit('lobbyError', "Incorrect Password.");
+            return;
+        }
+
         if (Object.keys(room.players).length >= room.maxPlayers) {
             socket.emit('lobbyError', "Room is full.");
             return;
@@ -153,7 +178,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         socket.roomId = roomId;
         
-        let username = cleanUsername(data.username);
+        let username = cleanString(data.username, "Guest", true);
         let p = createPlayer(socket.id, data.tankId, username);
         
         // Drop them in mid-match
@@ -164,7 +189,7 @@ io.on('connection', (socket) => {
         p.maxHp = p.hp;
 
         room.players[socket.id] = p;
-        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: room.maxPlayers });
+        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: room.maxPlayers, roomName: room.name });
     });
 
     socket.on('changeTank', (tankId) => {
@@ -336,7 +361,7 @@ setInterval(() => {
                                         if(activeRooms[roomId]) {
                                             activeRooms[roomId].gameState = "PLAYING";
                                             resetBoard(activeRooms[roomId]);
-                                            io.to(roomId).emit('gameStart', { trees: activeRooms[roomId].trees, roomId: roomId, maxPlayers: room.maxPlayers });
+                                            io.to(roomId).emit('gameStart', { trees: activeRooms[roomId].trees, roomId: roomId, maxPlayers: room.maxPlayers, roomName: room.name });
                                         }
                                     }, 6000);
                                 }
