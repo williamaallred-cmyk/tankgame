@@ -38,7 +38,7 @@ const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1600;
 
 // Lobby System
-let activeRooms = {}; // Maps roomId -> Room State
+let activeRooms = {}; 
 
 function generateTrees() {
     let trees = [];
@@ -55,7 +55,6 @@ function generateTrees() {
 }
 
 function getRandomSpawn(room) {
-    // Basic random spawn away from edges
     return {
         x: Math.random() * (WORLD_WIDTH - 200) + 100,
         y: Math.random() * (WORLD_HEIGHT - 200) + 100,
@@ -303,17 +302,17 @@ setInterval(() => {
             }
         }
 
-        // 2. Process Projectiles
+        // 2. Process Projectiles with Continuous Collision Detection
         for (let i = room.projectiles.length - 1; i >= 0; i--) {
             let proj = room.projectiles[i];
             
-            // Track the previous position to draw the collision line segment
+            // Track previous position for CCD raycast
             let oldX = proj.x;
             let oldY = proj.y;
             
             proj.x += Math.cos(proj.angle) * proj.speed;
             proj.y += Math.sin(proj.angle) * proj.speed;
-            proj.distance += proj.speed; // Track distance for falloff
+            proj.distance += proj.speed; 
 
             if (proj.x < 0 || proj.x > WORLD_WIDTH || proj.y < 0 || proj.y > WORLD_HEIGHT || proj.distance > proj.maxRange) {
                 room.projectiles.splice(i, 1);
@@ -324,7 +323,7 @@ setInterval(() => {
             let hitResult = null;
 
             for (let tree of room.trees) {
-                // Raycast against the tree
+                // Raycast against tree
                 hitResult = pointSegmentDist(tree.x, tree.y, oldX, oldY, proj.x, proj.y);
                 if (hitResult.distance < 4 + tree.radius) {
                     hit = true;
@@ -337,71 +336,86 @@ setInterval(() => {
                 for (let id in room.players) {
                     let p = room.players[id];
                     if (id !== proj.shooterId && p.hp > 0) {
-                        // Raycast against the enemy tank
+                        // Raycast against enemy tank
                         hitResult = pointSegmentDist(p.x, p.y, oldX, oldY, proj.x, proj.y);
                         
+                        // 18 is tank body radius, 4 is projectile radius
                         if (hitResult.distance < 18 + 4) {
                             hit = true;
                             
                             let stats = TANK_STATS[p.tankTypeId];
                             
-                            // 1. Calculate Hit Angle (Front, Side, Rear)
+                            // Calculate Hit Angle (Front, Side, Rear)
                             let relAngle = proj.angle - p.angle;
-                        
-                        // 3. Armor vs Penetration Scaling
-                        let penRatio = effectivePen / effectiveArmor;
-                        let dmgMultiplier = Math.min(3.0, Math.max(0.1, penRatio));
-                        
-                        // Final Damage with +/- 15% RNG
-                        let finalDamage = Math.round(proj.damage * dmgMultiplier * (0.85 + Math.random() * 0.3));
-                        p.hp -= finalDamage;
-                        
-                        // 4. Critical Hits / Debuffs
-                        let critText = null;
-                        // Crit chance scales dynamically based on damage chunk taken (up to 80% chance)
-                        if (finalDamage > p.maxHp * 0.05 && Math.random() < (finalDamage / p.maxHp) * 1.5) {
-                            let rolls = ['track', 'engine', 'turret', 'gun'];
-                            let critType = rolls[Math.floor(Math.random() * rolls.length)];
-                            p.debuffs[critType] = 300; // Debuff lasts 5 seconds (300 frames)
+                            while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+                            while (relAngle > Math.PI) relAngle -= Math.PI * 2;
                             
-                            if(critType === 'track') critText = "TRACKS DESTROYED!";
-                            if(critType === 'engine') critText = "ENGINE DAMAGED!";
-                            if(critType === 'turret') critText = "TURRET JAMMED!";
-                            if(critType === 'gun') critText = "GUN DAMAGED!";
-                        }
+                            let absRelAngle = Math.abs(relAngle);
+                            let hitZone = 's'; // Default to side
+                            if (absRelAngle < Math.PI / 4 || absRelAngle > 7 * Math.PI / 4) hitZone = 'r'; // Rear
+                            else if (absRelAngle > 3 * Math.PI / 4 && absRelAngle < 5 * Math.PI / 4) hitZone = 'f'; // Front
 
-                        // Emit the effect at the exact point of intersection, not the end of the frame
-                        io.to(roomId).emit('effect', { type: 'hitTank', x: hitResult.hitX, y: hitResult.hitY, damage: finalDamage, critText: critText });
+                            let effectiveArmor = stats.armor[hitZone];
+                            
+                            // Distance Falloff for Penetration
+                            let penFalloff = Math.max(0.5, 1 - (proj.distance / proj.maxRange));
+                            let effectivePen = proj.pen * penFalloff;
 
-                        if (p.hp <= 0) {
-                            let shooter = room.players[proj.shooterId];
-                            if (shooter) {
-                                shooter.kills++;
-                                io.to(roomId).emit('killfeed', { killer: shooter.username, victim: p.username });
+                            // Armor vs Penetration Scaling
+                            let penRatio = effectivePen / effectiveArmor;
+                            let dmgMultiplier = Math.min(3.0, Math.max(0.1, penRatio));
+                            
+                            // Final Damage with +/- 15% RNG
+                            let finalDamage = Math.round(proj.damage * dmgMultiplier * (0.85 + Math.random() * 0.3));
+                            p.hp -= finalDamage;
+                            
+                            // Critical Hits / Debuffs
+                            let critText = null;
+                            if (finalDamage > p.maxHp * 0.05 && Math.random() < (finalDamage / p.maxHp) * 1.5) {
+                                let rolls = ['track', 'engine', 'turret', 'gun'];
+                                let critType = rolls[Math.floor(Math.random() * rolls.length)];
+                                p.debuffs[critType] = 300; // Debuff lasts 5 seconds
                                 
-                                if (shooter.kills >= 10) {
-                                    room.isGameOver = true;
-                                    room.winnerName = shooter.username;
-                                    io.to(roomId).emit('gameOver', { winnerName: shooter.username });
-                                    
-                                    // Reset room after 5 seconds
-                                    setTimeout(() => {
-                                        room.isGameOver = false;
-                                        room.winnerName = null;
-                                        room.projectiles = [];
-                                        room.trees = generateTrees();
-                                        for(let pid in room.players) {
-                                            let pl = room.players[pid];
-                                            pl.kills = 0; pl.hp = 0; pl.respawnTimer = 1;
-                                        }
-                                        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, trees: room.trees });
-                                    }, 5000);
-                                }
+                                if(critType === 'track') critText = "TRACKS DESTROYED!";
+                                if(critType === 'engine') critText = "ENGINE DAMAGED!";
+                                if(critType === 'turret') critText = "TURRET JAMMED!";
+                                if(critType === 'gun') critText = "GUN DAMAGED!";
                             }
-                            p.deaths++;
-                            p.respawnTimer = 180; // 3 second respawn
+
+                            // Emit visual effect
+                            io.to(roomId).emit('effect', { type: 'hitTank', x: hitResult.hitX, y: hitResult.hitY, damage: finalDamage, critText: critText });
+
+                            // Handle Death Event
+                            if (p.hp <= 0) {
+                                let shooter = room.players[proj.shooterId];
+                                if (shooter) {
+                                    shooter.kills++;
+                                    io.to(roomId).emit('killfeed', { killer: shooter.username, victim: p.username });
+                                    
+                                    if (shooter.kills >= 10) {
+                                        room.isGameOver = true;
+                                        room.winnerName = shooter.username;
+                                        io.to(roomId).emit('gameOver', { winnerName: shooter.username });
+                                        
+                                        // Reset room after 5 seconds
+                                        setTimeout(() => {
+                                            room.isGameOver = false;
+                                            room.winnerName = null;
+                                            room.projectiles = [];
+                                            room.trees = generateTrees();
+                                            for(let pid in room.players) {
+                                                let pl = room.players[pid];
+                                                pl.kills = 0; pl.hp = 0; pl.respawnTimer = 1;
+                                            }
+                                            io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, trees: room.trees });
+                                        }, 5000);
+                                    }
+                                }
+                                p.deaths++;
+                                p.respawnTimer = 180; // 3 second respawn penalty
+                            }
+                            break; // Exit player collision check since shell exploded
                         }
-                        break;
                     }
                 }
             }
