@@ -58,9 +58,11 @@
                 <span id="playerTankName" class="text-emerald-400 font-black text-sm truncate uppercase tracking-wide">YOU</span>
                 <span class="text-[10px] font-bold text-gray-400 uppercase">Status: <span id="cooldownStatus" class="text-emerald-300">READY</span></span>
             </div>
-            <div class="w-full bg-gray-900 rounded h-4 relative border border-emerald-900 overflow-hidden shadow-inner">
+            <div class="w-full bg-gray-900 rounded h-4 relative border border-emerald-900 overflow-hidden shadow-inner mb-2">
                 <div id="playerHpBar" class="bg-emerald-500 h-full w-full transition-all duration-200" style="width: 100%"></div>
             </div>
+            <!-- Status Effects Container -->
+            <div id="playerDebuffs" class="flex space-x-1 mt-1 empty:hidden h-4"></div>
         </div>
 
         <!-- UI: Leaderboard -->
@@ -200,7 +202,7 @@
     <script src="/socket.io/socket.io.js"></script>
     
     <script>
-        // TANK DATA
+        // TANK DATA for UI
         const TANK_DATA = {
             "WW1": [{ id: "mkiv", name: "Mark IV" }, { id: "a7v", name: "A7V" }, { id: "ft17", name: "Renault FT" }],
             "WW2": [{ id: "m4", name: "M4 Sherman" }, { id: "t34", name: "T-34" }, { id: "tiger", name: "Tiger I" }, { id: "stug", name: "StuG III" }],
@@ -238,11 +240,12 @@
         let myId = null;
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
-        let clientTanks = {};
+        let clientTanks = {}; // For Interpolation
         
         // Visual effects & Camera
         let explosions = [];
         let particles = [];
+        let floatingTexts = [];
         let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2 };
         let zoom = 1.0;
 
@@ -250,7 +253,6 @@
         const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
         let screenMouseX = 0; let screenMouseY = 0;
 
-        // --- Socket Listeners (Setup Once) ---
         socket.on('init', (id) => { myId = id; requestRooms(); });
 
         socket.on('publicRoomsList', (rooms) => {
@@ -289,7 +291,7 @@
             document.getElementById('leaderboardHud').classList.remove('hidden');
             
             trees = data.trees;
-            explosions = []; particles = [];
+            explosions = []; particles = []; floatingTexts = [];
         });
 
         socket.on('stateUpdate', (data) => {
@@ -306,7 +308,7 @@
         socket.on('killfeed', (data) => {
             const feed = document.getElementById('killfeed');
             const msg = document.createElement('div');
-            msg.className = "bg-gray-900/80 border border-gray-700 px-4 py-1.5 rounded text-xs font-bold shadow-lg animate-bounce";
+            msg.className = "bg-gray-900/80 border border-gray-700 px-4 py-1.5 rounded text-xs font-bold shadow-lg animate-bounce text-center";
             msg.innerHTML = `<span class="text-emerald-400">${data.killer}</span> <span class="text-gray-400 text-[10px] mx-1">DESTROYED</span> <span class="text-red-400">${data.victim}</span>`;
             feed.appendChild(msg);
             setTimeout(() => feed.removeChild(msg), 3500);
@@ -326,12 +328,21 @@
                 for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
             } else if (data.type === 'hitTank') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
-                for (let i = 0; i < 4 * data.damage; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
+                
+                // Limit particles based on damage
+                let particleCount = Math.min(30, Math.max(10, Math.floor(data.damage / 10)));
+                for (let i = 0; i < particleCount; i++) {
+                    particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
+                }
+                
+                // Spawn floating damage text
+                floatingTexts.push({ x: data.x, y: data.y, text: "-" + data.damage, color: '#fca5a5', life: 45, offset: 0 });
+                if (data.critText) {
+                    floatingTexts.push({ x: data.x, y: data.y - 15, text: data.critText, color: '#fbbf24', life: 75, offset: 0 });
+                }
             }
         });
 
-        // --- Polling & UI Logic ---
-        
         function requestRooms() {
             if (!document.getElementById('lobbyModal').classList.contains('hidden')) {
                 socket.emit('requestPublicRooms');
@@ -395,8 +406,6 @@
             if (socket && socket.connected) socket.emit('changeTank', e.target.value);
         });
 
-        // --- Controls & Rendering ---
-        
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
             screenMouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -446,8 +455,18 @@
             const me = serverState.players[myId];
 
             document.getElementById('playerHpBar').style.width = Math.max(0, (me.hp / me.maxHp) * 100) + '%';
-            document.getElementById('playerTankName').innerText = `${me.username} (${getTankName(me.tankTypeId)})`;
+            document.getElementById('playerTankName').innerText = me.username + ` (${getTankName(me.tankTypeId)})`;
             
+            // Render Debuff Status UI
+            let debuffHtml = '';
+            if (me.debuffs) {
+                if (me.debuffs.track > 0) debuffHtml += `<span class="bg-red-900 text-red-100 text-[8px] px-1 rounded border border-red-500 font-bold uppercase">TRACKS</span>`;
+                if (me.debuffs.engine > 0) debuffHtml += `<span class="bg-amber-900 text-amber-100 text-[8px] px-1 rounded border border-amber-500 font-bold uppercase">ENGINE</span>`;
+                if (me.debuffs.turret > 0) debuffHtml += `<span class="bg-purple-900 text-purple-100 text-[8px] px-1 rounded border border-purple-500 font-bold uppercase">TURRET</span>`;
+                if (me.debuffs.gun > 0) debuffHtml += `<span class="bg-gray-700 text-gray-100 text-[8px] px-1 rounded border border-gray-400 font-bold uppercase">GUN</span>`;
+            }
+            document.getElementById('playerDebuffs').innerHTML = debuffHtml;
+
             const cdEl = document.getElementById('cooldownStatus');
             if (me.reloadCooldown <= 0) { cdEl.innerText = "READY"; cdEl.className = "text-emerald-300 font-black"; } 
             else { cdEl.innerText = "RELOADING"; cdEl.className = "text-amber-500"; }
@@ -501,14 +520,17 @@
             ctx.fillStyle = trackColor; ctx.fillRect(0, -4, 26, 8);
             ctx.restore();
             
+            // Draw floating username
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
             ctx.fillText(p.username, 0, -35);
 
+            // Enemy HP Bar
             if (!isMe) {
                 ctx.fillStyle = '#111'; ctx.fillRect(-15, -28, 30, 4);
                 ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, -28, 30 * (p.hp / p.maxHp), 4);
             }
+            ctx.restore();
         }
 
         let frameCount = 0;
@@ -573,6 +595,7 @@
                 let p = serverState.players[id];
                 if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
                 
+                // Client-side interpolation to smooth out server latency
                 if (!clientTanks[id]) clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
                 let ct = clientTanks[id];
                 
@@ -604,6 +627,22 @@
                 ctx.fillRect(pt.x, pt.y, pt.size, pt.size); ctx.restore();
             });
             particles = particles.filter(pt => pt.life > 0);
+
+            // Draw Floating Combat Text (Damage / Crits)
+            ctx.font = '900 14px Inter';
+            ctx.textAlign = 'center';
+            floatingTexts.forEach(ft => {
+                ft.life--;
+                ft.offset += 0.5;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, Math.min(1, ft.life / 30));
+                ctx.fillStyle = '#000'; 
+                ctx.fillText(ft.text, ft.x + 1, ft.y - ft.offset + 1);
+                ctx.fillStyle = ft.color;
+                ctx.fillText(ft.text, ft.x, ft.y - ft.offset);
+                ctx.restore();
+            });
+            floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
             ctx.restore(); 
             requestAnimationFrame(renderLoop);
