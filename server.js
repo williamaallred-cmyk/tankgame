@@ -374,7 +374,7 @@ setInterval(() => {
                             if (finalDamage > p.maxHp * 0.05 && Math.random() < (finalDamage / p.maxHp) * 1.5) {
                                 let rolls = ['track', 'engine', 'turret', 'gun'];
                                 let critType = rolls[Math.floor(Math.random() * rolls.length)];
-                                p.debuffs[critType] = 300; // Debuff lasts 5 seconds
+                                p.debuffs[critType] = 900; // FIXED: Debuff now lasts 15 seconds (900 ticks) instead of 5
                                 
                                 if(critType === 'track') critText = "TRACKS DESTROYED!";
                                 if(critType === 'engine') critText = "ENGINE DAMAGED!";
