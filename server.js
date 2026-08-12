@@ -65,6 +65,20 @@ function getRandomSpawn(room) {
 
 function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
 
+// Helper for Continuous Collision Detection (Tunneling fix)
+function pointSegmentDist(px, py, x1, y1, x2, y2) {
+    let lengthSquared = Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
+    if (lengthSquared === 0) return { distance: dist(px, py, x1, y1), hitX: x1, hitY: y1 };
+    
+    // Find the closest point on the line segment using vector projection
+    let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / lengthSquared;
+    t = Math.max(0, Math.min(1, t)); // Clamp between 0 and 1
+    
+    let closestX = x1 + t * (x2 - x1);
+    let closestY = y1 + t * (y2 - y1);
+    return { distance: dist(px, py, closestX, closestY), hitX: closestX, hitY: closestY };
+}
+
 function getTankName(id) {
     const names = {
         "mkiv": "Mark IV", "a7v": "A7V", "ft17": "Renault FT",
@@ -292,6 +306,11 @@ setInterval(() => {
         // 2. Process Projectiles
         for (let i = room.projectiles.length - 1; i >= 0; i--) {
             let proj = room.projectiles[i];
+            
+            // Track the previous position to draw the collision line segment
+            let oldX = proj.x;
+            let oldY = proj.y;
+            
             proj.x += Math.cos(proj.angle) * proj.speed;
             proj.y += Math.sin(proj.angle) * proj.speed;
             proj.distance += proj.speed; // Track distance for falloff
@@ -302,10 +321,14 @@ setInterval(() => {
             }
 
             let hit = false;
+            let hitResult = null;
+
             for (let tree of room.trees) {
-                if (dist(proj.x, proj.y, tree.x, tree.y) < 4 + tree.radius) {
+                // Raycast against the tree
+                hitResult = pointSegmentDist(tree.x, tree.y, oldX, oldY, proj.x, proj.y);
+                if (hitResult.distance < 4 + tree.radius) {
                     hit = true;
-                    io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y });
+                    io.to(roomId).emit('effect', { type: 'hitTree', x: hitResult.hitX, y: hitResult.hitY });
                     break;
                 }
             }
@@ -313,26 +336,17 @@ setInterval(() => {
             if (!hit) {
                 for (let id in room.players) {
                     let p = room.players[id];
-                    if (id !== proj.shooterId && p.hp > 0 && dist(proj.x, proj.y, p.x, p.y) < 18 + 4) {
-                        hit = true;
+                    if (id !== proj.shooterId && p.hp > 0) {
+                        // Raycast against the enemy tank
+                        hitResult = pointSegmentDist(p.x, p.y, oldX, oldY, proj.x, proj.y);
                         
-                        let stats = TANK_STATS[p.tankTypeId];
-                        
-                        // 1. Calculate Hit Angle (Front, Side, Rear)
-                        let relAngle = proj.angle - p.angle;
-                        while (relAngle > Math.PI) relAngle -= Math.PI * 2;
-                        while (relAngle < -Math.PI) relAngle += Math.PI * 2;
-                        let absRel = Math.abs(relAngle);
-                        
-                        let hitZone = 's';
-                        if (absRel > Math.PI * 0.75) hitZone = 'f';       // Hit Front
-                        else if (absRel < Math.PI * 0.25) hitZone = 'r'; // Hit Rear
-                        
-                        let effectiveArmor = stats.armor[hitZone];
-                        
-                        // 2. Distance Falloff (Penetration drops up to 50% at max range)
-                        let distFactor = Math.max(0.5, 1 - (proj.distance / proj.maxRange) * 0.5);
-                        let effectivePen = proj.pen * distFactor;
+                        if (hitResult.distance < 18 + 4) {
+                            hit = true;
+                            
+                            let stats = TANK_STATS[p.tankTypeId];
+                            
+                            // 1. Calculate Hit Angle (Front, Side, Rear)
+                            let relAngle = proj.angle - p.angle;
                         
                         // 3. Armor vs Penetration Scaling
                         let penRatio = effectivePen / effectiveArmor;
@@ -356,7 +370,8 @@ setInterval(() => {
                             if(critType === 'gun') critText = "GUN DAMAGED!";
                         }
 
-                        io.to(roomId).emit('effect', { type: 'hitTank', x: proj.x, y: proj.y, damage: finalDamage, critText: critText });
+                        // Emit the effect at the exact point of intersection, not the end of the frame
+                        io.to(roomId).emit('effect', { type: 'hitTank', x: hitResult.hitX, y: hitResult.hitY, damage: finalDamage, critText: critText });
 
                         if (p.hp <= 0) {
                             let shooter = room.players[proj.shooterId];
