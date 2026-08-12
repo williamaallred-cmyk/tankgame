@@ -1,212 +1,172 @@
 const express = require('express');
-const app = express();
 const http = require('http');
-const server = http.createServer(app);
-const { Server } = require("socket.io");
-const io = new Server(server);
+const { Server } = require('socket.io');
 const path = require('path');
-
-// Initialize the profanity filter
 const filter = require('leo-profanity');
-filter.loadDictionary('en'); // Force English dictionary load
 
-// Custom blacklist for tricky names
-const customBadWords = ['fucku', 'fuku', 'b1tch', 'bitch', 'asshole', 'sh1t', 'cunt', 'n1gga', 'nigga'];
-filter.add(customBadWords);
+// Ensure English dictionary is loaded for the profanity filter
+filter.loadDictionary('en');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Advanced Damage Model Stats
+// hp: Base Health, pen: Armor Penetration, armor: {f: Front, s: Side, r: Rear}
 const TANK_STATS = {
     // WW1
-    "mkiv": { hp: 4, speed: 1.5, reload: 180, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
-    "a7v": { hp: 5, speed: 1.2, reload: 200, damage: 1, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
-    "ft17": { hp: 2, speed: 2.5, reload: 120, damage: 1, range: 350, accuracy: 0.12, turretSpeed: 0.04, projSpeed: 20 },
+    "mkiv": { hp: 400, speed: 1.5, reload: 180, damage: 100, pen: 30, armor: {f: 15, s: 12, r: 12}, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
+    "a7v":  { hp: 500, speed: 1.2, reload: 200, damage: 100, pen: 30, armor: {f: 30, s: 15, r: 15}, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24 },
+    "ft17": { hp: 200, speed: 2.5, reload: 120, damage: 80,  pen: 25, armor: {f: 16, s: 8, r: 8},   range: 350, accuracy: 0.12, turretSpeed: 0.04, projSpeed: 20 },
     // WW2
-    "m4": { hp: 3, speed: 3.0, reload: 120, damage: 1, range: 600, accuracy: 0.08, turretSpeed: 0.06, projSpeed: 36 },
-    "t34": { hp: 3, speed: 3.2, reload: 110, damage: 1, range: 550, accuracy: 0.10, turretSpeed: 0.05, projSpeed: 36 },
-    "tiger": { hp: 5, speed: 2.0, reload: 160, damage: 2, range: 800, accuracy: 0.04, turretSpeed: 0.03, projSpeed: 44 },
-    "stug": { hp: 4, speed: 2.2, reload: 140, damage: 1.5, range: 700, accuracy: 0.05, turretSpeed: 0.015, projSpeed: 40 },
+    "m4":    { hp: 500, speed: 3.0, reload: 120, damage: 150, pen: 120, armor: {f: 50, s: 38, r: 38},  range: 600, accuracy: 0.08, turretSpeed: 0.06, projSpeed: 36 },
+    "t34":   { hp: 500, speed: 3.2, reload: 110, damage: 150, pen: 110, armor: {f: 45, s: 45, r: 40},  range: 550, accuracy: 0.10, turretSpeed: 0.05, projSpeed: 36 },
+    "tiger": { hp: 700, speed: 2.0, reload: 160, damage: 200, pen: 150, armor: {f: 100, s: 80, r: 80}, range: 800, accuracy: 0.04, turretSpeed: 0.03, projSpeed: 44 },
+    "stug":  { hp: 450, speed: 2.2, reload: 140, damage: 180, pen: 140, armor: {f: 80, s: 30, r: 30},  range: 700, accuracy: 0.05, turretSpeed: 0.015, projSpeed: 40 },
     // Cold War
-    "m48": { hp: 4, speed: 3.5, reload: 100, damage: 1.5, range: 800, accuracy: 0.05, turretSpeed: 0.08, projSpeed: 52 },
-    "t55": { hp: 4, speed: 3.4, reload: 110, damage: 1.5, range: 750, accuracy: 0.06, turretSpeed: 0.07, projSpeed: 50 },
-    "leo1": { hp: 3, speed: 4.5, reload: 90, damage: 1.5, range: 900, accuracy: 0.03, turretSpeed: 0.10, projSpeed: 56 },
+    "m48":  { hp: 700, speed: 3.5, reload: 100, damage: 250, pen: 250, armor: {f: 110, s: 76, r: 35}, range: 800, accuracy: 0.05, turretSpeed: 0.08, projSpeed: 52 },
+    "t55":  { hp: 650, speed: 3.4, reload: 110, damage: 250, pen: 260, armor: {f: 100, s: 80, r: 45}, range: 750, accuracy: 0.06, turretSpeed: 0.07, projSpeed: 50 },
+    "leo1": { hp: 600, speed: 4.5, reload: 90,  damage: 240, pen: 300, armor: {f: 70, s: 35, r: 25},  range: 900, accuracy: 0.03, turretSpeed: 0.10, projSpeed: 56 },
     // Modern
-    "m1a2": { hp: 6, speed: 4.0, reload: 100, damage: 2, range: 1200, accuracy: 0.01, turretSpeed: 0.15, projSpeed: 76 },
-    "t90": { hp: 5, speed: 3.8, reload: 100, damage: 2, range: 1100, accuracy: 0.02, turretSpeed: 0.12, projSpeed: 72 }
+    "m1a2": { hp: 1000, speed: 4.0, reload: 100, damage: 400, pen: 600, armor: {f: 600, s: 150, r: 50}, range: 1200, accuracy: 0.01, turretSpeed: 0.15, projSpeed: 76 },
+    "t90":  { hp: 900,  speed: 3.8, reload: 100, damage: 380, pen: 550, armor: {f: 550, s: 130, r: 45}, range: 1100, accuracy: 0.02, turretSpeed: 0.12, projSpeed: 72 }
 };
 
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1600;
-const KILLS_TO_WIN = 10;
-let activeRooms = {};
 
-function dist(x1, y1, x2, y2) {
-    return Math.hypot(x2 - x1, y2 - y1);
+// Lobby System
+let activeRooms = {}; // Maps roomId -> Room State
+
+function generateTrees() {
+    let trees = [];
+    const numTrees = 20 + Math.floor(Math.random() * 15);
+    for (let i = 0; i < numTrees; i++) {
+        trees.push({
+            x: Math.random() * (WORLD_WIDTH - 200) + 100,
+            y: Math.random() * (WORLD_HEIGHT - 200) + 100,
+            radius: 22 + Math.random() * 12,
+            swayOffset: Math.random() * Math.PI * 2
+        });
+    }
+    return trees;
+}
+
+function getRandomSpawn(room) {
+    // Basic random spawn away from edges
+    return {
+        x: Math.random() * (WORLD_WIDTH - 200) + 100,
+        y: Math.random() * (WORLD_HEIGHT - 200) + 100,
+        angle: Math.random() * Math.PI * 2
+    };
+}
+
+function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+
+function getTankName(id) {
+    const names = {
+        "mkiv": "Mark IV", "a7v": "A7V", "ft17": "Renault FT",
+        "m4": "M4 Sherman", "t34": "T-34", "tiger": "Tiger I", "stug": "StuG III",
+        "m48": "M48 Patton", "t55": "T-55", "leo1": "Leopard 1",
+        "m1a2": "M1A2 Abrams", "t90": "T-90"
+    };
+    return names[id] || "Tank";
 }
 
 function createPlayer(id, tankId, username) {
     return {
         id: id, x: -1000, y: -1000, angle: 0, turretAngle: 0, hp: 0, maxHp: 0, 
-        reloadCooldown: 0, tankTypeId: tankId || 'm4', username: username,
+        reloadCooldown: 0, tankTypeId: tankId || 'm4', tankName: getTankName(tankId || 'm4'), username: username,
         kills: 0, deaths: 0, respawnTimer: 0,
-        inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false }
+        debuffs: { track: 0, engine: 0, turret: 0, gun: 0 },
+        inputs: { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false }
     };
-}
-
-function getRandomSpawn(room) {
-    let x, y, safe;
-    let attempts = 0;
-    do {
-        x = 100 + Math.random() * (WORLD_WIDTH - 200);
-        y = 100 + Math.random() * (WORLD_HEIGHT - 200);
-        safe = true;
-        for (let id in room.players) {
-           let other = room.players[id];
-           if (other.hp > 0 && dist(x,y, other.x, other.y) < 300) safe = false;
-        }
-        attempts++;
-    } while (!safe && attempts < 50);
-    return {x, y, angle: Math.random() * Math.PI * 2};
-}
-
-function resetBoard(room) {
-    room.projectiles = [];
-    room.trees = [];
-    
-    // Spawn players
-    for (let id in room.players) {
-        let p = room.players[id];
-        let spawn = getRandomSpawn(room);
-        p.x = spawn.x; p.y = spawn.y;
-        p.angle = spawn.angle; p.turretAngle = spawn.angle;
-        p.hp = TANK_STATS[p.tankTypeId].hp; 
-        p.maxHp = p.hp;
-        p.reloadCooldown = 0;
-        p.respawnTimer = 0;
-        p.kills = 0;
-        p.deaths = 0;
-    }
-
-    // Generate trees across the larger map
-    const numTrees = 30 + Math.floor(Math.random() * 20);
-    for (let i = 0; i < numTrees; i++) {
-        let tx = 100 + Math.random() * (WORLD_WIDTH - 200);
-        let ty = 100 + Math.random() * (WORLD_HEIGHT - 200);
-        room.trees.push({ x: tx, y: ty, radius: 22 + Math.random() * 15, swayOffset: Math.random() * Math.PI * 2 });
-    }
 }
 
 io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
-    function cleanString(rawStr, fallback, isName = false) {
-        let str = rawStr ? rawStr.trim() : "";
-        if (str === "") return fallback;
-        if (isName && filter.check(str)) return "TrollTank";
-        return isName ? filter.clean(str) : str;
+    // Filter profanity logic
+    function cleanUsername(rawName) {
+        let name = rawName.trim().substring(0, 12);
+        if (!name || name === "") name = "Operator";
+        if (filter.check(name)) return "TrollTank"; // Penalty for bad words
+        return name;
     }
 
-    // Client requests the list of active public rooms
     socket.on('requestPublicRooms', () => {
         let publicRooms = [];
-        for (let roomId in activeRooms) {
-            let room = activeRooms[roomId];
-            if (!room.isPrivate && room.gameState !== "GAMEOVER") {
-                publicRooms.push({
-                    id: room.id,
-                    name: room.name,
-                    playerCount: Object.keys(room.players).length,
-                    maxPlayers: room.maxPlayers
-                });
+        for (let id in activeRooms) {
+            let r = activeRooms[id];
+            if (!r.isPrivate) {
+                publicRooms.push({ id: id, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
     });
 
     socket.on('createRoom', (data) => {
-        if (socket.roomId) return;
-        
-        let roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
         let maxP = parseInt(data.maxPlayers) || 5;
-        if (maxP < 2) maxP = 2;
-        if (maxP > 5) maxP = 5;
+        if (maxP < 2) maxP = 2; if (maxP > 5) maxP = 5;
 
-        socket.join(roomId);
-        socket.roomId = roomId;
-
-        let room = {
+        activeRooms[roomId] = {
             id: roomId,
-            name: cleanString(data.roomName, `${cleanString(data.username, "Guest", true)}'s Match`),
+            name: filter.clean(data.roomName.substring(0, 20)) || "Match",
             isPrivate: data.isPrivate === 'private',
             password: data.password || "",
             maxPlayers: maxP,
             players: {},
             projectiles: [],
-            trees: [],
-            gameState: "PLAYING"
+            trees: generateTrees(),
+            isGameOver: false,
+            winnerName: null
         };
-        
-        let username = cleanString(data.username, "Guest", true);
-        room.players[socket.id] = createPlayer(socket.id, data.tankId, username);
-        
-        activeRooms[roomId] = room;
-        resetBoard(room);
 
-        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: maxP, roomName: room.name });
+        socket.emit('gameStart', { roomId: roomId, roomName: activeRooms[roomId].name, trees: activeRooms[roomId].trees });
+        joinRoomInternal(socket, roomId, data.tankId, data.username);
     });
 
     socket.on('joinRoom', (data) => {
-        if (socket.roomId) return;
-        let roomId = data.roomId.toUpperCase().trim();
-        let room = activeRooms[roomId];
+        let room = activeRooms[data.roomId];
+        if (!room) return socket.emit('lobbyError', "Room not found.");
+        if (Object.keys(room.players).length >= room.maxPlayers) return socket.emit('lobbyError', "Room is full.");
+        if (room.isPrivate && room.password !== data.password) return socket.emit('lobbyError', "Incorrect password.");
 
-        if (!room) {
-            socket.emit('lobbyError', "Room not found.");
-            return;
-        }
-
-        if (room.isPrivate && room.password !== data.password) {
-            socket.emit('lobbyError', "Incorrect Password.");
-            return;
-        }
-
-        if (Object.keys(room.players).length >= room.maxPlayers) {
-            socket.emit('lobbyError', "Room is full.");
-            return;
-        }
-
-        socket.join(roomId);
-        socket.roomId = roomId;
-        
-        let username = cleanString(data.username, "Guest", true);
-        let p = createPlayer(socket.id, data.tankId, username);
-        
-        // Drop them in mid-match
-        let spawn = getRandomSpawn(room);
-        p.x = spawn.x; p.y = spawn.y;
-        p.angle = spawn.angle; p.turretAngle = spawn.angle;
-        p.hp = TANK_STATS[p.tankTypeId].hp;
-        p.maxHp = p.hp;
-
-        room.players[socket.id] = p;
-        io.to(roomId).emit('gameStart', { trees: room.trees, roomId: roomId, maxPlayers: room.maxPlayers, roomName: room.name });
+        socket.emit('gameStart', { roomId: data.roomId, roomName: room.name, trees: room.trees });
+        joinRoomInternal(socket, data.roomId, data.tankId, data.username);
     });
 
+    function joinRoomInternal(socket, roomId, tankId, username) {
+        socket.join(roomId);
+        socket.roomId = roomId;
+        let room = activeRooms[roomId];
+        let pName = cleanUsername(username);
+        
+        let p = createPlayer(socket.id, tankId, pName);
+        let spawn = getRandomSpawn(room);
+        p.x = spawn.x; p.y = spawn.y; p.angle = spawn.angle; p.turretAngle = spawn.angle;
+        p.hp = TANK_STATS[p.tankTypeId].hp; p.maxHp = p.hp;
+        
+        room.players[socket.id] = p;
+    }
+
     socket.on('changeTank', (tankId) => {
-        if (socket.roomId && activeRooms[socket.roomId]) {
-            let room = activeRooms[socket.roomId];
-            if (room.players[socket.id] && TANK_STATS[tankId]) {
-                room.players[socket.id].tankTypeId = tankId;
+        if (socket.roomId && activeRooms[socket.roomId] && activeRooms[socket.roomId].players[socket.id]) {
+            let p = activeRooms[socket.roomId].players[socket.id];
+            if (TANK_STATS[tankId]) {
+                p.tankTypeId = tankId;
+                p.tankName = getTankName(tankId);
+                // Tank will physically change upon next respawn
             }
         }
     });
 
     socket.on('input', (data) => {
-        if (socket.roomId && activeRooms[socket.roomId]) {
-            let room = activeRooms[socket.roomId];
-            if (room.players[socket.id] && room.gameState === "PLAYING") {
-                room.players[socket.id].inputs = data;
-            }
+        if (socket.roomId && activeRooms[socket.roomId] && activeRooms[socket.roomId].players[socket.id]) {
+            activeRooms[socket.roomId].players[socket.id].inputs = data;
         }
     });
 
@@ -214,170 +174,235 @@ io.on('connection', (socket) => {
         if (socket.roomId && activeRooms[socket.roomId]) {
             let room = activeRooms[socket.roomId];
             delete room.players[socket.id];
-            
-            // If room is empty, destroy it
             if (Object.keys(room.players).length === 0) {
-                delete activeRooms[socket.roomId];
-            } else {
-                io.to(socket.roomId).emit('playerLeft', socket.id);
+                delete activeRooms[socket.roomId]; // Clean up empty rooms
             }
         }
     });
 });
 
+// 60 FPS Game Loop for all rooms
 setInterval(() => {
     for (let roomId in activeRooms) {
         let room = activeRooms[roomId];
-        
-        if (room.gameState === "PLAYING") {
+        if (room.isGameOver) continue;
+
+        // 1. Process Players
+        for (let id in room.players) {
+            let p = room.players[id];
             
-            for (let id in room.players) {
-                let p = room.players[id];
-                
-                // Handle Respawn
-                if (p.hp <= 0) {
-                    if (p.respawnTimer > 0) {
-                        p.respawnTimer--;
-                        if (p.respawnTimer <= 0) {
-                            let spawn = getRandomSpawn(room);
-                            p.x = spawn.x; p.y = spawn.y;
-                            p.angle = spawn.angle; p.turretAngle = spawn.angle;
-                            p.hp = TANK_STATS[p.tankTypeId].hp;
-                            p.maxHp = p.hp;
-                            p.reloadCooldown = 0;
-                        }
-                    }
-                    continue;
-                }
-
-                let stats = TANK_STATS[p.tankTypeId];
-                p.maxHp = stats.hp;
-
-                let moveX = 0; let moveY = 0;
-                if (p.inputs.w) moveY -= 1;
-                if (p.inputs.s) moveY += 1;
-                if (p.inputs.a) moveX -= 1;
-                if (p.inputs.d) moveX += 1;
-
-                if (moveX !== 0 || moveY !== 0) {
-                    let targetAngle = Math.atan2(moveY, moveX);
-                    let aDiff = targetAngle - p.angle;
-                    while (aDiff < -Math.PI) aDiff += Math.PI * 2;
-                    while (aDiff > Math.PI) aDiff -= Math.PI * 2;
-                    p.angle += aDiff * 0.15; // Smooth hull rotation
-
-                    let nextX = p.x + Math.cos(targetAngle) * stats.speed;
-                    let nextY = p.y + Math.sin(targetAngle) * stats.speed;
-
-                    let hitTree = false;
-                    for (let tree of room.trees) {
-                        if (dist(nextX, nextY, tree.x, tree.y) < 18 + tree.radius) {
-                            hitTree = true; break;
-                        }
-                    }
-                    if (!hitTree) {
-                        p.x = Math.max(30, Math.min(WORLD_WIDTH - 30, nextX));
-                        p.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, nextY));
+            // Handle Respawning
+            if (p.hp <= 0) {
+                if (p.respawnTimer > 0) {
+                    p.respawnTimer--;
+                    if (p.respawnTimer <= 0) {
+                        let spawn = getRandomSpawn(room);
+                        p.x = spawn.x; p.y = spawn.y;
+                        p.angle = spawn.angle; p.turretAngle = spawn.angle;
+                        p.hp = TANK_STATS[p.tankTypeId].hp;
+                        p.maxHp = p.hp;
+                        p.reloadCooldown = 0;
+                        p.debuffs = { track: 0, engine: 0, turret: 0, gun: 0 };
                     }
                 }
-
-                let targetTurretAngle = Math.atan2(p.inputs.mouseY - p.y, p.inputs.mouseX - p.x);
-                let tDiff = targetTurretAngle - p.turretAngle;
-                while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-                while (tDiff > Math.PI) tDiff -= Math.PI * 2;
-                
-                if (Math.abs(tDiff) <= stats.turretSpeed) {
-                    p.turretAngle = targetTurretAngle;
-                } else {
-                    p.turretAngle += Math.sign(tDiff) * stats.turretSpeed;
-                }
-
-                if (p.reloadCooldown <= 0 && p.inputs.mouseDown) {
-                    let muzzleX = p.x + Math.cos(p.turretAngle) * 28;
-                    let muzzleY = p.y + Math.sin(p.turretAngle) * 28;
-                    let spreadAngle = p.turretAngle + (Math.random() - 0.5) * stats.accuracy;
-                    
-                    room.projectiles.push({ 
-                        x: muzzleX, y: muzzleY, 
-                        angle: spreadAngle, 
-                        speed: stats.projSpeed, 
-                        shooterId: id, 
-                        damage: stats.damage,
-                        distance: 0,
-                        maxRange: stats.range
-                    });
-                    p.reloadCooldown = stats.reload;
-                    io.to(roomId).emit('effect', { type: 'fire', x: muzzleX, y: muzzleY });
-                }
-                if (p.reloadCooldown > 0) p.reloadCooldown--;
+                continue;
             }
 
-            for (let i = room.projectiles.length - 1; i >= 0; i--) {
-                let proj = room.projectiles[i];
-                proj.x += Math.cos(proj.angle) * proj.speed;
-                proj.y += Math.sin(proj.angle) * proj.speed;
-                proj.distance += proj.speed;
+            let stats = TANK_STATS[p.tankTypeId];
+            p.maxHp = stats.hp;
 
-                let hit = false;
-                
-                if (proj.distance > proj.maxRange) {
-                    hit = true;
-                    io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y }); 
-                }
+            // Process Debuff Timers
+            for (let key in p.debuffs) {
+                if (p.debuffs[key] > 0) p.debuffs[key]--;
+            }
 
-                if (!hit && (proj.x < 0 || proj.x > WORLD_WIDTH || proj.y < 0 || proj.y > WORLD_HEIGHT)) hit = true;
+            // Movement Physics with Engine/Track Debuffs
+            let currentSpeed = stats.speed;
+            if (p.debuffs.track > 0) currentSpeed = 0; // Immobilized
+            else if (p.debuffs.engine > 0) currentSpeed *= 0.4; // Slowed
 
-                if (!hit) {
-                    for (let tree of room.trees) {
-                        if (dist(proj.x, proj.y, tree.x, tree.y) < tree.radius + 4) {
-                            hit = true;
-                            io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y });
-                            break;
-                        }
+            let moveX = 0; let moveY = 0;
+            if (p.inputs.w) moveY -= 1;
+            if (p.inputs.s) moveY += 1;
+            if (p.inputs.a) moveX -= 1;
+            if (p.inputs.d) moveX += 1;
+
+            if (moveX !== 0 || moveY !== 0) {
+                let targetAngle = Math.atan2(moveY, moveX);
+                let aDiff = targetAngle - p.angle;
+                while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+                while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+                p.angle += aDiff * 0.15;
+
+                let nextX = p.x + Math.cos(targetAngle) * currentSpeed;
+                let nextY = p.y + Math.sin(targetAngle) * currentSpeed;
+
+                let hitTree = false;
+                for (let tree of room.trees) {
+                    if (dist(nextX, nextY, tree.x, tree.y) < 18 + tree.radius) {
+                        hitTree = true; break;
                     }
                 }
+                if (!hitTree) {
+                    p.x = Math.max(30, Math.min(WORLD_WIDTH - 30, nextX));
+                    p.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, nextY));
+                }
+            }
 
-                if (!hit) {
-                    for (let id in room.players) {
-                        let p = room.players[id];
-                        if (id !== proj.shooterId && p.hp > 0 && dist(proj.x, proj.y, p.x, p.y) < 18 + 4) {
-                            hit = true;
-                            p.hp -= proj.damage;
-                            io.to(roomId).emit('effect', { type: 'hitTank', x: proj.x, y: proj.y, damage: proj.damage });
+            // Turret Traverse with Jam Debuff
+            let currentTurretSpeed = stats.turretSpeed;
+            if (p.debuffs.turret > 0) currentTurretSpeed *= 0.1;
 
-                            if (p.hp <= 0) {
-                                let shooter = room.players[proj.shooterId];
-                                if (shooter) shooter.kills++;
-                                p.deaths++;
-                                p.respawnTimer = 180; // 3 seconds at 60fps
-                                io.to(roomId).emit('killfeed', { killer: shooter ? shooter.username : "Unknown", victim: p.username });
+            let targetTurretAngle = Math.atan2(p.inputs.mouseY - p.y, p.inputs.mouseX - p.x);
+            let tDiff = targetTurretAngle - p.turretAngle;
+            while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+            while (tDiff > Math.PI) tDiff -= Math.PI * 2;
+            
+            if (Math.abs(tDiff) <= currentTurretSpeed) {
+                p.turretAngle = targetTurretAngle;
+            } else {
+                p.turretAngle += Math.sign(tDiff) * currentTurretSpeed;
+            }
 
-                                // Check Win Condition
-                                if (shooter && shooter.kills >= KILLS_TO_WIN) {
-                                    room.gameState = "GAMEOVER";
+            // Reload and Firing logic with Gun Damage Debuff
+            let currentReload = stats.reload;
+            if (p.debuffs.gun > 0) currentReload *= 2.5;
+
+            if (p.reloadCooldown > 0) p.reloadCooldown--;
+            if (p.reloadCooldown <= 0 && p.inputs.mouseDown) {
+                let muzzleX = p.x + Math.cos(p.turretAngle) * 28;
+                let muzzleY = p.y + Math.sin(p.turretAngle) * 28;
+                let spreadAngle = p.turretAngle + (Math.random() - 0.5) * stats.accuracy;
+                
+                room.projectiles.push({ 
+                    x: muzzleX, y: muzzleY, 
+                    angle: spreadAngle, 
+                    speed: stats.projSpeed, 
+                    shooterId: id, 
+                    damage: stats.damage,
+                    pen: stats.pen,
+                    distance: 0,
+                    maxRange: stats.range
+                });
+                p.reloadCooldown = currentReload;
+                io.to(roomId).emit('effect', { type: 'fire', x: muzzleX, y: muzzleY });
+            }
+        }
+
+        // 2. Process Projectiles
+        for (let i = room.projectiles.length - 1; i >= 0; i--) {
+            let proj = room.projectiles[i];
+            proj.x += Math.cos(proj.angle) * proj.speed;
+            proj.y += Math.sin(proj.angle) * proj.speed;
+            proj.distance += proj.speed; // Track distance for falloff
+
+            if (proj.x < 0 || proj.x > WORLD_WIDTH || proj.y < 0 || proj.y > WORLD_HEIGHT || proj.distance > proj.maxRange) {
+                room.projectiles.splice(i, 1);
+                continue;
+            }
+
+            let hit = false;
+            for (let tree of room.trees) {
+                if (dist(proj.x, proj.y, tree.x, tree.y) < 4 + tree.radius) {
+                    hit = true;
+                    io.to(roomId).emit('effect', { type: 'hitTree', x: proj.x, y: proj.y });
+                    break;
+                }
+            }
+
+            if (!hit) {
+                for (let id in room.players) {
+                    let p = room.players[id];
+                    if (id !== proj.shooterId && p.hp > 0 && dist(proj.x, proj.y, p.x, p.y) < 18 + 4) {
+                        hit = true;
+                        
+                        let stats = TANK_STATS[p.tankTypeId];
+                        
+                        // 1. Calculate Hit Angle (Front, Side, Rear)
+                        let relAngle = proj.angle - p.angle;
+                        while (relAngle > Math.PI) relAngle -= Math.PI * 2;
+                        while (relAngle < -Math.PI) relAngle += Math.PI * 2;
+                        let absRel = Math.abs(relAngle);
+                        
+                        let hitZone = 's';
+                        if (absRel > Math.PI * 0.75) hitZone = 'f';       // Hit Front
+                        else if (absRel < Math.PI * 0.25) hitZone = 'r'; // Hit Rear
+                        
+                        let effectiveArmor = stats.armor[hitZone];
+                        
+                        // 2. Distance Falloff (Penetration drops up to 50% at max range)
+                        let distFactor = Math.max(0.5, 1 - (proj.distance / proj.maxRange) * 0.5);
+                        let effectivePen = proj.pen * distFactor;
+                        
+                        // 3. Armor vs Penetration Scaling
+                        let penRatio = effectivePen / effectiveArmor;
+                        let dmgMultiplier = Math.min(3.0, Math.max(0.1, penRatio));
+                        
+                        // Final Damage with +/- 15% RNG
+                        let finalDamage = Math.round(proj.damage * dmgMultiplier * (0.85 + Math.random() * 0.3));
+                        p.hp -= finalDamage;
+                        
+                        // 4. Critical Hits / Debuffs
+                        let critText = null;
+                        // Crit chance scales dynamically based on damage chunk taken (up to 80% chance)
+                        if (finalDamage > p.maxHp * 0.05 && Math.random() < (finalDamage / p.maxHp) * 1.5) {
+                            let rolls = ['track', 'engine', 'turret', 'gun'];
+                            let critType = rolls[Math.floor(Math.random() * rolls.length)];
+                            p.debuffs[critType] = 300; // Debuff lasts 5 seconds (300 frames)
+                            
+                            if(critType === 'track') critText = "TRACKS DESTROYED!";
+                            if(critType === 'engine') critText = "ENGINE DAMAGED!";
+                            if(critType === 'turret') critText = "TURRET JAMMED!";
+                            if(critType === 'gun') critText = "GUN DAMAGED!";
+                        }
+
+                        io.to(roomId).emit('effect', { type: 'hitTank', x: proj.x, y: proj.y, damage: finalDamage, critText: critText });
+
+                        if (p.hp <= 0) {
+                            let shooter = room.players[proj.shooterId];
+                            if (shooter) {
+                                shooter.kills++;
+                                io.to(roomId).emit('killfeed', { killer: shooter.username, victim: p.username });
+                                
+                                if (shooter.kills >= 10) {
+                                    room.isGameOver = true;
+                                    room.winnerName = shooter.username;
                                     io.to(roomId).emit('gameOver', { winnerName: shooter.username });
                                     
+                                    // Reset room after 5 seconds
                                     setTimeout(() => {
-                                        if(activeRooms[roomId]) {
-                                            activeRooms[roomId].gameState = "PLAYING";
-                                            resetBoard(activeRooms[roomId]);
-                                            io.to(roomId).emit('gameStart', { trees: activeRooms[roomId].trees, roomId: roomId, maxPlayers: room.maxPlayers, roomName: room.name });
+                                        room.isGameOver = false;
+                                        room.winnerName = null;
+                                        room.projectiles = [];
+                                        room.trees = generateTrees();
+                                        for(let pid in room.players) {
+                                            let pl = room.players[pid];
+                                            pl.kills = 0; pl.hp = 0; pl.respawnTimer = 1;
                                         }
-                                    }, 6000);
+                                        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, trees: room.trees });
+                                    }, 5000);
                                 }
                             }
-                            break;
+                            p.deaths++;
+                            p.respawnTimer = 180; // 3 second respawn
                         }
+                        break;
                     }
                 }
-
-                if (hit) room.projectiles.splice(i, 1);
             }
 
-            io.to(roomId).emit('stateUpdate', { players: room.players, projectiles: room.projectiles });
+            if (hit) room.projectiles.splice(i, 1);
         }
+
+        // 3. Broadcast State
+        io.to(roomId).emit('stateUpdate', {
+            players: room.players,
+            projectiles: room.projectiles.map(p => ({x: p.x, y: p.y})) // strip unneeded data
+        });
     }
 }, 1000 / 60);
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Game Server running on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`Server Authoritative Multiplayer running on port ${PORT}`);
+});
