@@ -20,7 +20,7 @@
         .glow-green { box-shadow: 0 0 25px rgba(74, 222, 128, 0.4); }
         .hud-panel { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(16, 185, 129, 0.3); }
         
-        /* Custom scrollbar for leaderboard */
+        /* Custom scrollbars */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #059669; border-radius: 10px; }
@@ -30,8 +30,8 @@
 
     <header id="gameHeader" class="bg-gray-900/90 border-b border-emerald-800/50 p-4 flex flex-wrap justify-between items-center shadow-lg h-[74px] z-50 relative">
         <div class="flex items-center space-x-3">
-            <div class="bg-emerald-600 text-white font-black px-3.5 py-1.5 rounded-xl text-lg tracking-wider glow-green">
-                TANK DUEL FFA
+            <div class="bg-emerald-600 text-white font-black px-3.5 py-1.5 rounded-xl text-lg tracking-wider glow-green truncate max-w-[200px]" id="headerTitle">
+                TANK DUEL
             </div>
             <select id="headerTankSelect" class="bg-gray-800 text-emerald-400 font-bold border border-emerald-700/50 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer hidden"></select>
         </div>
@@ -39,7 +39,7 @@
         <div class="flex items-center space-x-4 text-sm flex-1 justify-center">
             <!-- Dynamic Room Code Display -->
             <div id="roomCodeDisplay" class="hidden bg-gray-800/80 px-4 py-1.5 rounded-lg border border-gray-700 text-xs text-center shrink-0">
-                ROOM: <span id="roomCodeText" class="font-black text-white tracking-widest">----</span>
+                ROOM CODE: <span id="roomCodeText" class="font-black text-white tracking-widest">----</span>
             </div>
         </div>
         
@@ -77,49 +77,114 @@
         </div>
         
         <!-- Multiplayer Connection Lobby -->
-        <div id="lobbyModal" class="absolute inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-40">
-            <div class="bg-gray-900 border border-emerald-500/50 p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4">
-                <h2 class="text-3xl font-black text-emerald-400 mb-2 text-center drop-shadow-md">DEATHMATCH</h2>
-                <p class="text-gray-400 text-xs mb-6 text-center">Create a private match or join a friend's room.</p>
+        <div id="lobbyModal" class="absolute inset-0 bg-black/80 backdrop-blur flex items-center justify-center z-40 overflow-y-auto p-4">
+            <div class="bg-gray-900 border border-emerald-500/50 p-6 rounded-2xl shadow-2xl max-w-4xl w-full">
                 
-                <div class="space-y-4 mb-6">
-                    <div>
-                        <label class="block text-[10px] text-emerald-400 font-bold uppercase mb-1">Callsign</label>
-                        <input type="text" id="usernameInput" maxlength="12" placeholder="Enter Username" class="w-full bg-gray-950 text-white border border-emerald-800 rounded p-2.5 outline-none focus:border-emerald-500 transition">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] text-emerald-400 font-bold uppercase mb-1">Vehicle Selection</label>
-                        <select id="tankSelect" class="w-full bg-gray-950 text-white border border-emerald-800 rounded p-2.5 outline-none cursor-pointer focus:border-emerald-500 transition"></select>
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-800">
-                    <!-- Create Room -->
-                    <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700 hover:border-emerald-700/50 transition">
-                        <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Max Players</label>
-                        <select id="maxPlayersInput" class="w-full bg-gray-900 text-white border border-gray-700 rounded p-2 text-sm outline-none mb-3">
-                            <option value="2">2 Players</option>
-                            <option value="3">3 Players</option>
-                            <option value="4">4 Players</option>
-                            <option value="5">5 Players</option>
-                        </select>
-                        <button id="createBtn" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg transition shadow">
-                            Create Room
-                        </button>
-                    </div>
-
-                    <!-- Join Room -->
-                    <div class="bg-gray-800/50 p-3 rounded-xl border border-gray-700 hover:border-blue-700/50 transition">
-                        <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Room Code</label>
-                        <input type="text" id="roomCodeInput" placeholder="e.g. A1B2C" maxlength="6" class="w-full bg-gray-900 text-white border border-gray-700 rounded p-2 text-sm outline-none mb-3 text-center uppercase tracking-widest">
-                        <button id="joinBtn" class="w-full bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold py-2.5 rounded-lg transition shadow">
-                            Join Room
-                        </button>
-                    </div>
+                <!-- Lobby Header -->
+                <div class="mb-6 pb-6 border-b border-gray-800 text-center">
+                    <h2 class="text-3xl font-black text-emerald-400 mb-1 drop-shadow-md">TANK DUEL ONLINE</h2>
+                    <p class="text-gray-400 text-xs">Global Multiplayer Server</p>
                 </div>
 
-                <p id="lobbyStatus" class="text-amber-400 text-sm font-bold mt-4 hidden animate-pulse text-center">Connecting to server...</p>
-                <p id="lobbyError" class="text-red-500 text-sm font-bold mt-4 hidden text-center"></p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    <!-- Left Column: Player Setup & Room Creation -->
+                    <div class="space-y-6">
+                        <!-- Player Setup -->
+                        <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+                            <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">1. Operator Setup</h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Callsign</label>
+                                    <input type="text" id="usernameInput" maxlength="12" placeholder="Enter Username" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Vehicle Selection</label>
+                                    <select id="tankSelect" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none cursor-pointer focus:border-emerald-500 transition"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Create Room -->
+                        <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+                            <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">2. Create Match</h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Room Name</label>
+                                    <input type="text" id="createRoomName" maxlength="20" placeholder="My Epic Battle" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Max Players</label>
+                                        <select id="maxPlayersInput" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none">
+                                            <option value="2">2 Players</option>
+                                            <option value="3">3 Players</option>
+                                            <option value="4">4 Players</option>
+                                            <option value="5" selected>5 Players</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Visibility</label>
+                                        <select id="privacySelect" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none">
+                                            <option value="public">Public</option>
+                                            <option value="private">Private</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div id="createPasswordContainer" class="hidden">
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Password</label>
+                                    <input type="text" id="createPassword" placeholder="Secret Password" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                </div>
+                                <button id="createBtn" class="w-full bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2.5 mt-2 rounded-lg transition shadow">
+                                    Create Room
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Server Browser & Join Private -->
+                    <div class="flex flex-col space-y-6">
+                        
+                        <!-- Public Server Browser -->
+                        <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 flex-1 flex flex-col">
+                            <div class="flex justify-between items-center mb-3 border-b border-emerald-900 pb-1">
+                                <h3 class="text-emerald-500 font-bold text-xs uppercase">Public Matches</h3>
+                                <button id="refreshBrowserBtn" class="text-[10px] text-gray-400 hover:text-white transition uppercase font-bold">Refresh</button>
+                            </div>
+                            
+                            <div class="flex-1 bg-gray-950 rounded border border-gray-700 overflow-hidden flex flex-col min-h-[160px]">
+                                <!-- Header Row -->
+                                <div class="grid grid-cols-12 gap-2 p-2 bg-gray-900 text-[10px] text-gray-400 font-bold uppercase border-b border-gray-800">
+                                    <div class="col-span-6">Room Name</div>
+                                    <div class="col-span-3 text-center">Players</div>
+                                    <div class="col-span-3"></div>
+                                </div>
+                                <!-- Room List -->
+                                <div id="serverBrowserList" class="overflow-y-auto flex-1 p-1">
+                                    <div class="text-center text-gray-500 text-xs mt-4">Connecting to matchmaking server...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Join Private Match -->
+                        <div class="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+                            <h3 class="text-emerald-500 font-bold text-xs uppercase mb-3 border-b border-emerald-900 pb-1">Join Private Match</h3>
+                            <div class="flex space-x-2">
+                                <input type="text" id="joinRoomCode" placeholder="Code (e.g. A1B2)" maxlength="6" class="flex-1 bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none text-center uppercase tracking-widest">
+                                <input type="text" id="joinPassword" placeholder="Password" class="flex-1 bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none">
+                            </div>
+                            <button id="joinPrivateBtn" class="w-full bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold py-2.5 mt-3 rounded-lg transition shadow">
+                                Join Private Room
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Messages -->
+                <div class="mt-4 h-6 text-center">
+                    <p id="lobbyStatus" class="text-amber-400 text-sm font-bold hidden animate-pulse"></p>
+                    <p id="lobbyError" class="text-red-500 text-sm font-bold hidden"></p>
+                </div>
             </div>
         </div>
         
@@ -135,7 +200,7 @@
     <script src="/socket.io/socket.io.js"></script>
     
     <script>
-        // Copy TANK_DATA here just to populate the UI Select dropdown
+        // TANK DATA
         const TANK_DATA = {
             "WW1": [{ id: "mkiv", name: "Mark IV" }, { id: "a7v", name: "A7V" }, { id: "ft17", name: "Renault FT" }],
             "WW2": [{ id: "m4", name: "M4 Sherman" }, { id: "t34", name: "T-34" }, { id: "tiger", name: "Tiger I" }, { id: "stug", name: "StuG III" }],
@@ -146,6 +211,7 @@
         const WORLD_WIDTH = 2400;
         const WORLD_HEIGHT = 1600;
 
+        // Populate Dropdowns
         const select = document.getElementById('tankSelect');
         const headerSelect = document.getElementById('headerTankSelect');
         let html = '';
@@ -168,7 +234,7 @@
         resizeCanvas();
         
         // Multiplayer State
-        let socket;
+        let socket = io(); // Connect immediately to fetch server browser list
         let myId = null;
         let serverState = { players: {}, projectiles: [] };
         let trees = [];
@@ -184,6 +250,153 @@
         const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
         let screenMouseX = 0; let screenMouseY = 0;
 
+        // --- Socket Listeners (Setup Once) ---
+        socket.on('init', (id) => { myId = id; requestRooms(); });
+
+        socket.on('publicRoomsList', (rooms) => {
+            const listEl = document.getElementById('serverBrowserList');
+            if (rooms.length === 0) {
+                listEl.innerHTML = `<div class="text-center text-gray-500 text-xs mt-4">No active public matches found.</div>`;
+                return;
+            }
+            
+            let domHtml = '';
+            rooms.forEach(r => {
+                let isFull = r.playerCount >= r.maxPlayers;
+                let btnHtml = isFull 
+                    ? `<button disabled class="w-full bg-gray-700 text-gray-500 text-[10px] font-bold py-1 rounded cursor-not-allowed">FULL</button>`
+                    : `<button onclick="joinPublicRoom('${r.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 rounded transition">JOIN</button>`;
+                
+                domHtml += `
+                    <div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded">
+                        <div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}</div>
+                        <div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div>
+                        <div class="col-span-3">${btnHtml}</div>
+                    </div>`;
+            });
+            listEl.innerHTML = domHtml;
+        });
+
+        socket.on('gameStart', (data) => {
+            document.getElementById('lobbyModal').classList.add('hidden');
+            document.getElementById('gameOverModal').classList.add('hidden');
+            
+            document.getElementById('headerTitle').innerText = data.roomName;
+            document.getElementById('roomCodeDisplay').classList.remove('hidden');
+            document.getElementById('roomCodeText').innerText = data.roomId;
+            document.getElementById('headerTankSelect').classList.remove('hidden');
+            document.getElementById('personalHud').classList.remove('hidden');
+            document.getElementById('leaderboardHud').classList.remove('hidden');
+            
+            trees = data.trees;
+            explosions = []; particles = [];
+        });
+
+        socket.on('stateUpdate', (data) => {
+            serverState = data;
+            updateHUD();
+        });
+
+        socket.on('lobbyError', (msg) => {
+            document.getElementById('lobbyStatus').classList.add('hidden');
+            document.getElementById('lobbyError').classList.remove('hidden');
+            document.getElementById('lobbyError').innerText = msg;
+        });
+
+        socket.on('killfeed', (data) => {
+            const feed = document.getElementById('killfeed');
+            const msg = document.createElement('div');
+            msg.className = "bg-gray-900/80 border border-gray-700 px-4 py-1.5 rounded text-xs font-bold shadow-lg animate-bounce";
+            msg.innerHTML = `<span class="text-emerald-400">${data.killer}</span> <span class="text-gray-400 text-[10px] mx-1">DESTROYED</span> <span class="text-red-400">${data.victim}</span>`;
+            feed.appendChild(msg);
+            setTimeout(() => feed.removeChild(msg), 3500);
+        });
+
+        socket.on('gameOver', (data) => {
+            const modal = document.getElementById('gameOverModal');
+            document.getElementById('winnerText').innerHTML = `<span class="text-emerald-400 font-black">${data.winnerName}</span> WINS THE MATCH!`;
+            modal.classList.remove('hidden');
+        });
+
+        socket.on('effect', (data) => {
+            if (data.type === 'fire') {
+                for (let i = 0; i < 5; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#fbbf24', size: 3, life: 12, maxLife: 12 });
+            } else if (data.type === 'hitTree') {
+                explosions.push({ x: data.x, y: data.y, radius: 6, color: '#b45309', alpha: 1.0 });
+                for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
+            } else if (data.type === 'hitTank') {
+                explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
+                for (let i = 0; i < 4 * data.damage; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
+            }
+        });
+
+        // --- Polling & UI Logic ---
+        
+        function requestRooms() {
+            if (!document.getElementById('lobbyModal').classList.contains('hidden')) {
+                socket.emit('requestPublicRooms');
+            }
+        }
+        setInterval(requestRooms, 5000); // Poll every 5s while in lobby
+        document.getElementById('refreshBrowserBtn').addEventListener('click', requestRooms);
+
+        // Toggle password field for Create Room
+        document.getElementById('privacySelect').addEventListener('change', (e) => {
+            const passContainer = document.getElementById('createPasswordContainer');
+            if (e.target.value === 'private') passContainer.classList.remove('hidden');
+            else passContainer.classList.add('hidden');
+        });
+
+        function showLoading(msg) {
+            document.getElementById('lobbyStatus').classList.remove('hidden');
+            document.getElementById('lobbyError').classList.add('hidden');
+            document.getElementById('lobbyStatus').innerText = msg;
+        }
+
+        // Global function for browser Join buttons
+        window.joinPublicRoom = function(roomId) {
+            showLoading("Joining server...");
+            socket.emit('joinRoom', { 
+                tankId: document.getElementById('tankSelect').value, 
+                username: document.getElementById('usernameInput').value,
+                roomId: roomId,
+                password: "" // Public rooms don't need a password
+            });
+        };
+
+        // Create Room Button
+        document.getElementById('createBtn').addEventListener('click', () => {
+            showLoading("Creating server...");
+            socket.emit('createRoom', { 
+                tankId: document.getElementById('tankSelect').value, 
+                username: document.getElementById('usernameInput').value,
+                roomName: document.getElementById('createRoomName').value,
+                maxPlayers: document.getElementById('maxPlayersInput').value,
+                isPrivate: document.getElementById('privacySelect').value,
+                password: document.getElementById('createPassword').value
+            });
+        });
+
+        // Join Private Button
+        document.getElementById('joinPrivateBtn').addEventListener('click', () => {
+            let code = document.getElementById('joinRoomCode').value;
+            if(!code) return;
+            showLoading("Verifying private room...");
+            socket.emit('joinRoom', { 
+                tankId: document.getElementById('tankSelect').value, 
+                username: document.getElementById('usernameInput').value,
+                roomId: code,
+                password: document.getElementById('joinPassword').value
+            });
+        });
+
+        // Change Tank Mid-Game
+        headerSelect.addEventListener('change', (e) => {
+            if (socket && socket.connected) socket.emit('changeTank', e.target.value);
+        });
+
+        // --- Controls & Rendering ---
+        
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
             screenMouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -196,8 +409,6 @@
             if (e.key === 's' || e.key === 'S') inputs.s = true;
             if (e.key === 'd' || e.key === 'D') inputs.d = true;
             if (e.key === 'Shift') inputs.shift = true;
-            
-            // Zoom controls
             if (e.key === '=' || e.key === '+') zoom = Math.min(2.0, zoom + 0.1);
             if (e.key === '-' || e.key === '_') zoom = Math.max(0.4, zoom - 0.1);
         });
@@ -213,98 +424,9 @@
         canvas.addEventListener('mousedown', (e) => { if (e.button === 0) inputs.mouseDown = true; });
         canvas.addEventListener('mouseup', (e) => { if (e.button === 0) inputs.mouseDown = false; });
 
-        headerSelect.addEventListener('change', (e) => {
-            if (socket && socket.connected) socket.emit('changeTank', e.target.value);
-        });
-
-        function initSocket() {
-            if(!socket) socket = io();
-            
-            socket.on('init', (id) => { myId = id; });
-
-            socket.on('gameStart', (data) => {
-                document.getElementById('lobbyModal').classList.add('hidden');
-                document.getElementById('gameOverModal').classList.add('hidden');
-                
-                document.getElementById('roomCodeDisplay').classList.remove('hidden');
-                document.getElementById('roomCodeText').innerText = data.roomId;
-                document.getElementById('headerTankSelect').classList.remove('hidden');
-                document.getElementById('personalHud').classList.remove('hidden');
-                document.getElementById('leaderboardHud').classList.remove('hidden');
-                
-                trees = data.trees;
-                explosions = []; particles = [];
-            });
-
-            socket.on('stateUpdate', (data) => {
-                serverState = data;
-                updateHUD();
-            });
-
-            socket.on('lobbyError', (msg) => {
-                document.getElementById('lobbyStatus').classList.add('hidden');
-                document.getElementById('lobbyError').classList.remove('hidden');
-                document.getElementById('lobbyError').innerText = msg;
-            });
-
-            socket.on('killfeed', (data) => {
-                const feed = document.getElementById('killfeed');
-                const msg = document.createElement('div');
-                msg.className = "bg-gray-900/80 border border-gray-700 px-4 py-1.5 rounded text-xs font-bold shadow-lg animate-bounce";
-                msg.innerHTML = `<span class="text-emerald-400">${data.killer}</span> <span class="text-gray-400 text-[10px] mx-1">DESTROYED</span> <span class="text-red-400">${data.victim}</span>`;
-                feed.appendChild(msg);
-                setTimeout(() => feed.removeChild(msg), 3500);
-            });
-
-            socket.on('gameOver', (data) => {
-                const modal = document.getElementById('gameOverModal');
-                document.getElementById('winnerText').innerHTML = `<span class="text-emerald-400 font-black">${data.winnerName}</span> WINS THE MATCH!`;
-                modal.classList.remove('hidden');
-            });
-
-            socket.on('effect', (data) => {
-                if (data.type === 'fire') {
-                    for (let i = 0; i < 5; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#fbbf24', size: 3, life: 12, maxLife: 12 });
-                } else if (data.type === 'hitTree') {
-                    explosions.push({ x: data.x, y: data.y, radius: 6, color: '#b45309', alpha: 1.0 });
-                    for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
-                } else if (data.type === 'hitTank') {
-                    explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
-                    for (let i = 0; i < 4 * data.damage; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
-                }
-            });
-        }
-
-        document.getElementById('createBtn').addEventListener('click', () => {
-            document.getElementById('lobbyStatus').classList.remove('hidden');
-            document.getElementById('lobbyError').classList.add('hidden');
-            document.getElementById('lobbyStatus').innerText = "Creating server...";
-            initSocket();
-            socket.emit('createRoom', { 
-                tankId: document.getElementById('tankSelect').value, 
-                username: document.getElementById('usernameInput').value,
-                maxPlayers: document.getElementById('maxPlayersInput').value
-            });
-        });
-
-        document.getElementById('joinBtn').addEventListener('click', () => {
-            let code = document.getElementById('roomCodeInput').value;
-            if(!code) return;
-            document.getElementById('lobbyStatus').classList.remove('hidden');
-            document.getElementById('lobbyError').classList.add('hidden');
-            document.getElementById('lobbyStatus').innerText = "Joining server...";
-            initSocket();
-            socket.emit('joinRoom', { 
-                tankId: document.getElementById('tankSelect').value, 
-                username: document.getElementById('usernameInput').value,
-                roomId: code
-            });
-        });
-
         // Emit inputs 60 times a second
         setInterval(() => {
-            if (myId) {
-                // Convert screen mouse to world mouse based on current camera and zoom
+            if (myId && document.getElementById('lobbyModal').classList.contains('hidden')) {
                 inputs.mouseX = camera.x + (screenMouseX - canvas.width / 2) / zoom;
                 inputs.mouseY = camera.y + (screenMouseY - canvas.height / 2) / zoom;
                 socket.emit('input', inputs);
@@ -323,7 +445,6 @@
             if (!myId || !serverState.players[myId]) return;
             const me = serverState.players[myId];
 
-            // Personal HUD update
             document.getElementById('playerHpBar').style.width = Math.max(0, (me.hp / me.maxHp) * 100) + '%';
             document.getElementById('playerTankName').innerText = `${me.username} (${getTankName(me.tankTypeId)})`;
             
@@ -331,7 +452,6 @@
             if (me.reloadCooldown <= 0) { cdEl.innerText = "READY"; cdEl.className = "text-emerald-300 font-black"; } 
             else { cdEl.innerText = "RELOADING"; cdEl.className = "text-amber-500"; }
 
-            // Leaderboard Update
             let sortedPlayers = Object.values(serverState.players).sort((a, b) => b.kills - a.kills);
             let lbHtml = '';
             sortedPlayers.forEach(p => {
@@ -366,7 +486,6 @@
             const trackColor = isMe ? '#052e16' : '#450a0a';
             const turretColor = isMe ? '#15803d' : '#b91c1c';
 
-            // Base rotation
             ctx.save();
             ctx.rotate(p.angle);
             ctx.fillStyle = trackColor;
@@ -375,7 +494,6 @@
             ctx.fillRect(-15, -13, 30, 26);
             ctx.restore();
 
-            // Turret rotation
             ctx.rotate(p.turretAngle);
             ctx.fillStyle = turretColor;
             ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
@@ -383,12 +501,10 @@
             ctx.fillStyle = trackColor; ctx.fillRect(0, -4, 26, 8);
             ctx.restore();
             
-            // Name tag above tank (doesn't rotate)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
             ctx.fillText(p.username, 0, -35);
 
-            // Small Floating HP bar for enemies
             if (!isMe) {
                 ctx.fillStyle = '#111'; ctx.fillRect(-15, -28, 30, 4);
                 ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, -28, 30 * (p.hp / p.maxHp), 4);
@@ -400,7 +516,6 @@
             frameCount++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Update Camera Tracking smoothly
             if (myId && serverState.players[myId]) {
                 let me = serverState.players[myId];
                 if (me.hp > 0) {
@@ -409,13 +524,11 @@
                 }
             }
 
-            // Apply Camera Transform
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
             ctx.scale(zoom, zoom);
             ctx.translate(-camera.x, -camera.y);
 
-            // Draw World Bounds & Grid (100m scale)
             ctx.fillStyle = '#0d160d';
             ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
             
@@ -424,11 +537,9 @@
             for (let x = 0; x <= WORLD_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_HEIGHT); ctx.stroke(); }
             for (let y = 0; y <= WORLD_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_WIDTH, y); ctx.stroke(); }
             
-            // World Border Warning Line
             ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-            // Client-side Aimbot logic
             if (inputs.shift && myId && serverState.players[myId]) {
                 const stabTanks = ['m48', 't55', 'leo1', 'm1a2', 't90'];
                 let me = serverState.players[myId];
@@ -442,7 +553,6 @@
                         }
                     }
                     if (closest) {
-                        // Override screen mouse world coordinate targeting
                         screenMouseX = (closest.x - camera.x) * zoom + canvas.width / 2;
                         screenMouseY = (closest.y - camera.y) * zoom + canvas.height / 2;
                         
@@ -457,10 +567,8 @@
                 }
             }
 
-            // Draw Trees
             trees.forEach(tree => drawTree(ctx, tree, frameCount));
 
-            // Draw and Interpolate Tanks
             for (let id in serverState.players) {
                 let p = serverState.players[id];
                 if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
@@ -478,13 +586,11 @@
                 drawTank(ctx, interpolatedTank, id === myId);
             }
 
-            // Draw Server Projectiles
             ctx.fillStyle = '#fef08a';
             serverState.projectiles.forEach(p => {
                 ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
             });
 
-            // Draw Local Effects
             explosions.forEach(exp => {
                 exp.radius += 2.2; exp.alpha -= 0.07;
                 ctx.save(); ctx.globalAlpha = Math.max(0, exp.alpha); ctx.fillStyle = exp.color;
@@ -499,8 +605,7 @@
             });
             particles = particles.filter(pt => pt.life > 0);
 
-            ctx.restore(); // End Camera Transform
-
+            ctx.restore(); 
             requestAnimationFrame(renderLoop);
         }
 
