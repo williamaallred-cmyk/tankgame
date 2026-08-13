@@ -6,9 +6,9 @@
     <title>Multiplayer Tank Duel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #0d160d; font-family: 'Inter', sans-serif; user-select: none; }
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Inter', sans-serif; user-select: none; }
         main { display: flex; align-items: center; justify-content: center; height: calc(100vh - 74px); width: 100vw; }
-        canvas { background: #111; width: 100%; height: 100%; display: block; }
+        canvas { background: #0f172a; width: 100%; height: 100%; display: block; }
         
         .glow-green { box-shadow: 0 0 25px rgba(74, 222, 128, 0.4); }
         .hud-panel { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(16, 185, 129, 0.3); }
@@ -173,7 +173,6 @@
             "Modern Era": [{ id: "m1a2", name: "M1A2 Abrams" }, { id: "t90", name: "T-90" }]
         };
 
-        // Real-life relative dimensions (w = Width, l = Length, t = Turret Radius, b = Barrel Length)
         const TANK_DIMS = {
             "mkiv":  { w: 22, l: 42, t: 0,  b: 15 },
             "a7v":   { w: 20, l: 38, t: 0,  b: 15 },
@@ -219,6 +218,20 @@
         let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2 }; let zoom = 1.0;
         const inputs = { w: false, a: false, s: false, d: false, shift: false, mouseX: 0, mouseY: 0, mouseDown: false };
         let screenMouseX = 0; let screenMouseY = 0;
+
+        // Math helper for Line of Sight
+        function pointSegmentDist(px, py, x1, y1, x2, y2) {
+            let A = px - x1; let B = py - y1; let C = x2 - x1; let D = y2 - y1;
+            let dot = A * C + B * D; let len_sq = C * C + D * D;
+            let param = -1;
+            if (len_sq != 0) param = dot / len_sq;
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = px - xx; let dy = py - yy;
+            return Math.hypot(dx, dy);
+        }
 
         socket.on('init', (id) => { myId = id; requestRooms(); });
         
@@ -357,9 +370,9 @@
             
             let debuffHtml = '';
             if (me.debuffs) {
-                if (me.debuffs.track > 0) debuffHtml += `<span class="bg-red-900 text-red-100 text-[8px] px-1 rounded border border-red-500 font-bold uppercase">TRACKS</span>`;
+                if (me.debuffs.track > 0) debuffHtml += `<span class="bg-red-900 text-red-100 text-[8px] px-1 rounded border border-red-500 font-bold uppercase">MOBILITY</span>`;
                 if (me.debuffs.engine > 0) debuffHtml += `<span class="bg-amber-900 text-amber-100 text-[8px] px-1 rounded border border-amber-500 font-bold uppercase">ENGINE</span>`;
-                if (me.debuffs.turret > 0) debuffHtml += `<span class="bg-purple-900 text-purple-100 text-[8px] px-1 rounded border border-purple-500 font-bold uppercase">TURRET</span>`;
+                if (me.debuffs.turret > 0) debuffHtml += `<span class="bg-purple-900 text-purple-100 text-[8px] px-1 rounded border border-purple-500 font-bold uppercase">JAMMED</span>`;
                 if (me.debuffs.gun > 0) debuffHtml += `<span class="bg-gray-700 text-gray-100 text-[8px] px-1 rounded border border-gray-400 font-bold uppercase">GUN</span>`;
             }
             document.getElementById('playerDebuffs').innerHTML = debuffHtml;
@@ -418,11 +431,12 @@
             ctx.restore(); 
             
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
-            ctx.fillText(p.username, 0, -dim.w/2 - 18);
+            let labelOffset = -dim.w/2 - 18;
+            ctx.fillText(p.username, 0, labelOffset);
 
             if (!isMe) {
-                ctx.fillStyle = '#111'; ctx.fillRect(-15, -dim.w/2 - 13, 30, 4);
-                ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, -dim.w/2 - 13, 30 * (p.hp / p.maxHp), 4);
+                ctx.fillStyle = '#111'; ctx.fillRect(-15, labelOffset + 5, 30, 4);
+                ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, labelOffset + 5, 30 * (p.hp / p.maxHp), 4);
             }
             ctx.restore();
         }
@@ -432,32 +446,53 @@
             frameCount++;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (myId && serverState.players[myId]) {
-                let me = serverState.players[myId];
-                if (me.hp > 0) {
-                    camera.x += (me.x - camera.x) * 0.1; camera.y += (me.y - camera.y) * 0.1;
-                }
+            let myTank = (myId && serverState.players[myId] && serverState.players[myId].hp > 0) ? serverState.players[myId] : null;
+
+            if (myTank) {
+                camera.x += (myTank.x - camera.x) * 0.1; camera.y += (myTank.y - camera.y) * 0.1;
             }
 
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2); ctx.scale(zoom, zoom); ctx.translate(-camera.x, -camera.y);
 
-            ctx.fillStyle = '#0d160d'; ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            // Huge ocean background behind the island
+            ctx.fillStyle = '#0f2027'; 
+            ctx.fillRect(-camera.x * 2 - 2000, -camera.y * 2 - 2000, WORLD_WIDTH + 8000, WORLD_HEIGHT + 8000); 
+
+            // The Island Ground
+            ctx.fillStyle = '#0d160d'; 
+            ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
             
+            // Shoreline transition (Beach/Dirt)
+            ctx.strokeStyle = '#4a5d23'; 
+            ctx.lineWidth = 15;
+            ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            
+            // Grid lines
             ctx.strokeStyle = 'rgba(74, 222, 128, 0.05)'; ctx.lineWidth = 1;
             for (let x = 0; x <= WORLD_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_HEIGHT); ctx.stroke(); }
             for (let y = 0; y <= WORLD_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_WIDTH, y); ctx.stroke(); }
-            ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)'; ctx.lineWidth = 4; ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-            if (inputs.shift && myId && serverState.players[myId]) {
+            if (inputs.shift && myTank) {
                 const stabTanks = ['m48', 't55', 'leo1', 'm1a2', 't90'];
-                let me = serverState.players[myId];
-                if (stabTanks.includes(me.tankTypeId) && me.hp > 0) {
+                if (stabTanks.includes(myTank.tankTypeId)) {
                     let closest = null; let minDist = Infinity;
                     for (let id in serverState.players) {
                         if (id !== myId && serverState.players[id].hp > 0) {
-                            let enemy = serverState.players[id]; let d = Math.hypot(me.x - enemy.x, me.y - enemy.y);
-                            if (d < minDist) { minDist = d; closest = enemy; }
+                            let enemy = serverState.players[id];
+                            
+                            // Aimbot must respect Line of Sight!
+                            let hasLoS = true;
+                            for (let tree of trees) {
+                                if (pointSegmentDist(tree.x, tree.y, myTank.x, myTank.y, enemy.x, enemy.y) < tree.radius * 0.85) {
+                                    hasLoS = false; break;
+                                }
+                            }
+                            
+                            if (hasLoS) {
+                                let d = Math.hypot(myTank.x - enemy.x, myTank.y - enemy.y);
+                                if (d < minDist) { minDist = d; closest = enemy; }
+                            }
                         }
                     }
                     if (closest) {
@@ -475,6 +510,19 @@
                 let p = serverState.players[id];
                 if (!p || p.hp <= 0) { delete clientTanks[id]; continue; }
                 
+                let isMe = (id === myId);
+                let isVisible = true;
+
+                // Fog of War Line of Sight Calculation
+                if (!isMe && myTank) {
+                    for (let tree of trees) {
+                        if (pointSegmentDist(tree.x, tree.y, myTank.x, myTank.y, p.x, p.y) < tree.radius * 0.85) {
+                            isVisible = false;
+                            break;
+                        }
+                    }
+                }
+
                 if (!clientTanks[id]) clientTanks[id] = { x: p.x, y: p.y, angle: p.angle, turretAngle: p.turretAngle };
                 let ct = clientTanks[id];
                 
@@ -484,8 +532,11 @@
                 let aDiff = p.angle - ct.angle; while (aDiff < -Math.PI) aDiff += Math.PI * 2; while (aDiff > Math.PI) aDiff -= Math.PI * 2; ct.angle += aDiff * 0.35;
                 let tDiff = p.turretAngle - ct.turretAngle; while (tDiff < -Math.PI) tDiff += Math.PI * 2; while (tDiff > Math.PI) tDiff -= Math.PI * 2; ct.turretAngle += tDiff * 0.4;
 
-                let interpolatedTank = { ...p, x: ct.x, y: ct.y, angle: ct.angle, turretAngle: ct.turretAngle };
-                drawTank(ctx, interpolatedTank, id === myId);
+                // Only draw the tank if we have line of sight to it!
+                if (isVisible) {
+                    let interpolatedTank = { ...p, x: ct.x, y: ct.y, angle: ct.angle, turretAngle: ct.turretAngle };
+                    drawTank(ctx, interpolatedTank, isMe);
+                }
             }
 
             ctx.fillStyle = '#fef08a';
