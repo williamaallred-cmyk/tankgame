@@ -9,14 +9,10 @@ const filter = require('leo-profanity');
 
 // Load English dictionary for profanity filter
 filter.loadDictionary('en');
-// Add custom troll words to blacklist
 filter.add(['bitch', 'fucku', 'fuk', 'shit', 'cunt', 'asshole']);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Advanced Damage Model Stats
-// hp: Base Health, pen: Armor Penetration, armor: {f: Front, s: Side, r: Rear}
-// hitbox: radius to scale collisions correctly with new dimensions
 const TANK_STATS = {
     // WW1
     "mkiv":  { hp: 400, speed: 1.5, reload: 180, damage: 100, pen: 30, armor: {f: 15, s: 12, r: 12}, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24, hitbox: 24 },
@@ -39,7 +35,7 @@ const TANK_STATS = {
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1600;
 
-let activeRooms = {}; // Store all ongoing matches
+let activeRooms = {}; 
 
 function generateTrees() {
     let trees = [];
@@ -60,7 +56,6 @@ function getRandomSpawn(room) {
     let valid = false;
     let attempts = 0;
     
-    // Attempt to find a clear spawn point up to 50 times
     while (!valid && attempts < 50) {
         spawn = {
             x: Math.random() * (WORLD_WIDTH - 200) + 100,
@@ -69,7 +64,6 @@ function getRandomSpawn(room) {
         };
         
         valid = true;
-        // Verify it isn't inside a tree (35px buffer accounts for the largest tanks)
         for (let tree of room.trees) {
             if (dist(spawn.x, spawn.y, tree.x, tree.y) < tree.radius + 35) {
                 valid = false;
@@ -83,7 +77,7 @@ function getRandomSpawn(room) {
 
 function dist(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
 
-// Math helper for Continuous Collision Detection (Raycasting)
+// Raycast Collision Math
 function pointSegmentDist(px, py, x1, y1, x2, y2) {
     let A = px - x1; let B = py - y1; let C = x2 - x1; let D = y2 - y1;
     let dot = A * C + B * D; let len_sq = C * C + D * D;
@@ -100,18 +94,12 @@ function pointSegmentDist(px, py, x1, y1, x2, y2) {
 io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
-    // Send public rooms to lobby browser
     socket.on('requestPublicRooms', () => {
         let publicRooms = [];
         for (let roomId in activeRooms) {
             let r = activeRooms[roomId];
             if (!r.isPrivate) {
-                publicRooms.push({
-                    id: roomId,
-                    name: r.name,
-                    playerCount: Object.keys(r.players).length,
-                    maxPlayers: r.maxPlayers
-                });
+                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
@@ -154,8 +142,8 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         socket.roomId = roomId;
 
-        let spawn = getRandomSpawn(room);
         let stats = TANK_STATS[tankId] || TANK_STATS['m4'];
+        let spawn = getRandomSpawn(room);
 
         room.players[socket.id] = {
             id: socket.id,
@@ -192,7 +180,7 @@ io.on('connection', (socket) => {
         if (room) {
             delete room.players[socket.id];
             if (Object.keys(room.players).length === 0) {
-                delete activeRooms[socket.roomId]; // Clean up empty rooms
+                delete activeRooms[socket.roomId];
             }
         }
     });
@@ -201,9 +189,8 @@ io.on('connection', (socket) => {
 setInterval(() => {
     for (let roomId in activeRooms) {
         let room = activeRooms[roomId];
-        if (room.winner) continue; // Match is over
+        if (room.winner) continue;
 
-        // Update Players
         for (let id in room.players) {
             let p = room.players[id];
             if (p.hp <= 0) continue;
@@ -211,22 +198,35 @@ setInterval(() => {
             let stats = TANK_STATS[p.tankTypeId];
             let i = p.inputs;
 
-            // Reduce Debuffs
             if (p.debuffs.track > 0) p.debuffs.track--;
             if (p.debuffs.engine > 0) p.debuffs.engine--;
             if (p.debuffs.turret > 0) p.debuffs.turret--;
             if (p.debuffs.gun > 0) p.debuffs.gun--;
 
-            // Movement & Rotation Math
             let speedMod = (p.debuffs.engine > 0) ? 0.3 : 1.0; 
-            if (p.debuffs.track > 0) speedMod = 0; // Immobilized
+            if (p.debuffs.track > 0) speedMod = 0; 
 
-            if (i.w) { p.x += Math.cos(p.angle) * stats.speed * speedMod; p.y += Math.sin(p.angle) * stats.speed * speedMod; }
-            if (i.s) { p.x -= Math.cos(p.angle) * stats.speed * speedMod * 0.5; p.y -= Math.sin(p.angle) * stats.speed * speedMod * 0.5; }
+            let nextX = p.x;
+            let nextY = p.y;
+            
+            if (i.w) { nextX += Math.cos(p.angle) * stats.speed * speedMod; nextY += Math.sin(p.angle) * stats.speed * speedMod; }
+            if (i.s) { nextX -= Math.cos(p.angle) * stats.speed * speedMod * 0.5; nextY -= Math.sin(p.angle) * stats.speed * speedMod * 0.5; }
             if (i.a) p.angle -= 0.03 * speedMod;
             if (i.d) p.angle += 0.03 * speedMod;
 
-            // World bounds
+            let canMove = true;
+            for (let tree of room.trees) {
+                if (dist(nextX, nextY, tree.x, tree.y) < tree.radius + stats.hitbox) {
+                    canMove = false;
+                    break;
+                }
+            }
+
+            if (canMove) {
+                p.x = nextX;
+                p.y = nextY;
+            }
+
             p.x = Math.max(20, Math.min(WORLD_WIDTH - 20, p.x));
             p.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, p.y));
 
@@ -242,9 +242,7 @@ setInterval(() => {
 
             if (p.reloadCooldown > 0) p.reloadCooldown--;
 
-            // Firing
             if (i.mouseDown && p.reloadCooldown <= 0 && p.debuffs.gun === 0) {
-                // Apply inaccuracy
                 let spread = (Math.random() - 0.5) * stats.accuracy;
                 let finalAngle = p.turretAngle + spread;
 
@@ -267,7 +265,6 @@ setInterval(() => {
         for (let j = room.projectiles.length - 1; j >= 0; j--) {
             let proj = room.projectiles[j];
             
-            // Store previous position for Raycast
             let oldX = proj.x;
             let oldY = proj.y;
             
@@ -277,12 +274,10 @@ setInterval(() => {
 
             let hit = false;
 
-            // Check World Bounds & Max Range
             if (proj.x < 0 || proj.x > WORLD_WIDTH || proj.y < 0 || proj.y > WORLD_HEIGHT || proj.distanceTraveled >= proj.range) {
                 hit = true;
             }
 
-            // Raycast against trees
             if (!hit) {
                 for (let k = room.trees.length - 1; k >= 0; k--) {
                     let t = room.trees[k];
@@ -307,27 +302,24 @@ setInterval(() => {
                         let hitResult = pointSegmentDist(p.x, p.y, oldX, oldY, proj.x, proj.y);
                         let stats = TANK_STATS[p.tankTypeId];
                         
-                        // Use unique hitbox size + 4 for shell radius
                         if (hitResult.distance < stats.hitbox + 4) {
                             hit = true;
                             
-                            // Calculate Angle of Impact
                             let relAngle = proj.angle - p.angle;
                             while (relAngle < -Math.PI) relAngle += Math.PI * 2;
                             while (relAngle > Math.PI) relAngle -= Math.PI * 2;
                             
                             let relDeg = Math.abs(relAngle * (180 / Math.PI));
-                            let effectiveArmor = stats.armor.s; // default side
+                            let effectiveArmor = stats.armor.s; 
                             
-                            if (relDeg < 45 || relDeg > 315) effectiveArmor = stats.armor.r; // Hit in Rear
-                            else if (relDeg > 135 && relDeg < 225) effectiveArmor = stats.armor.f; // Hit in Front
+                            if (relDeg < 45 || relDeg > 315) effectiveArmor = stats.armor.r; 
+                            else if (relDeg > 135 && relDeg < 225) effectiveArmor = stats.armor.f; 
                             
                             let penChance = proj.pen / effectiveArmor;
                             let finalDamage = 0;
                             let isCrit = false;
                             let critText = "";
                             
-                            // Penetration Logic
                             if (penChance > 1.2) {
                                 finalDamage = proj.damage * (0.8 + Math.random() * 0.4); 
                                 if (Math.random() < 0.2) isCrit = true; 
@@ -335,18 +327,17 @@ setInterval(() => {
                                 finalDamage = proj.damage * (0.5 + Math.random() * 0.3);
                                 if (Math.random() < 0.1) isCrit = true;
                             } else {
-                                finalDamage = proj.damage * 0.1; // Scratch
+                                finalDamage = proj.damage * 0.1; 
                             }
                             
                             finalDamage = Math.floor(finalDamage);
                             p.hp -= finalDamage;
 
-                            // Apply 15-second Critical Hits (900 ticks)
                             if (isCrit) {
                                 let r = Math.random();
-                                if (r < 0.25) { p.debuffs.track = 900; critText = "TRACKS DESTROYED!"; }
+                                if (r < 0.25) { p.debuffs.track = 900; critText = "MOBILITY HIT!"; }
                                 else if (r < 0.5) { p.debuffs.engine = 900; critText = "ENGINE DAMAGED!"; }
-                                else if (r < 0.75) { p.debuffs.turret = 900; critText = "TURRET JAMMED!"; }
+                                else if (r < 0.75) { p.debuffs.turret = 900; critText = "WEAPON JAMMED!"; }
                                 else { p.debuffs.gun = 900; critText = "GUN BARREL WRECKED!"; }
                             }
 
