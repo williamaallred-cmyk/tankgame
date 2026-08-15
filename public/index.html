@@ -117,6 +117,16 @@
                                         <option value="hybrid">⚔ Hybrid (Mixed Terrain)</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Era Lock</label>
+                                    <select id="eraLockSelect" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                        <option value="All">All Eras (Open)</option>
+                                        <option value="WW1">WW1 Only</option>
+                                        <option value="WW2">WW2 Only</option>
+                                        <option value="Cold War">Cold War Only</option>
+                                        <option value="Modern Era">Modern Era Only</option>
+                                    </select>
+                                </div>
                                 <div id="createPasswordContainer" class="hidden">
                                     <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Password</label>
                                     <input type="text" id="createPassword" placeholder="Secret Password" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
@@ -223,6 +233,18 @@
         let trees = [];
         let clientTanks = {};
         let currentMapType = 'forest';
+        let currentEraRestriction = 'All';
+
+        // Preload tank images from public/tanks/ — game uses canvas shapes if files are missing
+        const tankImages = {};
+        for (let era in TANK_DATA) {
+            for (let t of TANK_DATA[era]) {
+                const hull = new Image(), turret = new Image();
+                hull.src = `/tanks/${t.id}_hull.png`;
+                turret.src = `/tanks/${t.id}_turret.png`;
+                tankImages[t.id] = { hull, turret };
+            }
+        }
         
         let explosions = []; let particles = []; let floatingTexts = [];
         let camera = { x: WORLD_WIDTH/2, y: WORLD_HEIGHT/2 }; let zoom = 1.0;
@@ -257,7 +279,8 @@
                     ? `<button disabled class="w-full bg-gray-700 text-gray-500 text-[10px] font-bold py-1 rounded cursor-not-allowed">FULL</button>`
                     : `<button onclick="joinPublicRoom('${r.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 rounded transition">JOIN</button>`;
                 let mapTag = `<span class="text-[9px] text-gray-500 ml-1">${mapEmoji[r.mapType] || '🌲'}</span>`;
-                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}${mapTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
+                let eraTag = (r.eraRestriction && r.eraRestriction !== 'All') ? `<span class="text-[9px] bg-amber-900/50 text-amber-400 border border-amber-700/50 px-1 rounded ml-1">${r.eraRestriction}</span>` : '';
+                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}${mapTag}${eraTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
             });
             listEl.innerHTML = domHtml;
         });
@@ -271,7 +294,20 @@
             document.getElementById('headerTankSelect').classList.remove('hidden');
             document.getElementById('personalHud').classList.remove('hidden');
             document.getElementById('leaderboardHud').classList.remove('hidden');
-            currentMapType = data.mapType || 'forest'; trees = data.trees; explosions = []; particles = []; floatingTexts = [];
+            currentMapType = data.mapType || 'forest';
+            currentEraRestriction = data.eraRestriction || 'All';
+            // Filter in-game tank switcher to the era if the room is era-locked
+            if (currentEraRestriction !== 'All') {
+                let filteredHtml = '';
+                for (let t of (TANK_DATA[currentEraRestriction] || [])) filteredHtml += `<option value="${t.id}">${t.name}</option>`;
+                headerSelect.innerHTML = filteredHtml;
+                if (filteredHtml && !filteredHtml.includes(`value="${headerSelect.value}"`)) headerSelect.value = headerSelect.options[0]?.value;
+            } else {
+                let allHtml = ''; for (let era in TANK_DATA) { allHtml += `<optgroup label="${era}">`; for (let t of TANK_DATA[era]) allHtml += `<option value="${t.id}">${t.name}</option>`; allHtml += `</optgroup>`; }
+                headerSelect.innerHTML = allHtml;
+                headerSelect.value = document.getElementById('tankSelect').value;
+            }
+            trees = data.trees; explosions = []; particles = []; floatingTexts = [];
         });
 
         socket.on('stateUpdate', (data) => { serverState = data; updateHUD(); });
@@ -323,7 +359,7 @@
 
         document.getElementById('createBtn').addEventListener('click', () => {
             showLoading("Creating server...");
-            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value });
+            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value, eraRestriction: document.getElementById('eraLockSelect').value });
         });
 
         document.getElementById('joinPrivateBtn').addEventListener('click', () => {
@@ -437,62 +473,73 @@
         function drawTank(ctx, p, isMe) {
             ctx.save();
             ctx.translate(p.x, p.y);
+
+            const dim = TANK_DIMS[p.tankTypeId] || { w: 18, l: 30, t: 11, b: 24 };
+            const imgs = tankImages[p.tankTypeId];
+            const hullReady = imgs && imgs.hull.complete && imgs.hull.naturalWidth > 0;
+            const turretReady = imgs && imgs.turret.complete && imgs.turret.naturalWidth > 0;
+
             const color = isMe ? '#166534' : '#991b1b';
             const trackColor = isMe ? '#052e16' : '#450a0a';
             const turretColor = isMe ? '#15803d' : '#b91c1c';
             const highlightColor = isMe ? '#1d8a42' : '#bb2828';
+            const teamRing = isMe ? '#22c55e' : '#ef4444';
 
-            const dim = TANK_DIMS[p.tankTypeId] || { w: 18, l: 30, t: 11, b: 24 };
-
+            // Hull
             ctx.save();
             ctx.rotate(p.angle);
-
-            // Hull shadow
-            ctx.save(); ctx.globalAlpha = 0.32; ctx.fillStyle = '#000';
-            ctx.fillRect(-dim.l/2 + 4, -dim.w/2 + 4, dim.l, dim.w); ctx.restore();
-
-            // Tracks
-            ctx.fillStyle = trackColor;
-            ctx.fillRect(-dim.l/2 - 2, -dim.w/2 - 4, dim.l + 4, 6);
-            ctx.fillRect(-dim.l/2 - 2, dim.w/2 - 2, dim.l + 4, 6);
-            // Track grooves
-            ctx.fillStyle = 'rgba(0,0,0,0.35)';
-            const gc = Math.floor((dim.l + 4) / 7);
-            for (let g = 0; g < gc; g++) { let gx = -dim.l/2 - 2 + g * 7 + 2; ctx.fillRect(gx, -dim.w/2 - 4, 2, 6); ctx.fillRect(gx, dim.w/2 - 2, 2, 6); }
-
-            // Hull body
-            ctx.fillStyle = color;
-            ctx.fillRect(-dim.l/2, -dim.w/2, dim.l, dim.w);
-            // Hull highlight (front edge)
-            ctx.fillStyle = highlightColor;
-            ctx.fillRect(-dim.l/2, -dim.w/2, dim.l * 0.28, dim.w);
-            // Hull top edge sheen
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
-            ctx.fillRect(-dim.l/2, -dim.w/2, dim.l, 3);
-            // Armor plate crease
-            ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(-dim.l/2 + dim.l*0.28, -dim.w/2); ctx.lineTo(-dim.l/2 + dim.l*0.28, dim.w/2); ctx.stroke();
-
+            if (hullReady) {
+                ctx.drawImage(imgs.hull, -dim.l/2, -dim.w/2, dim.l, dim.w);
+            } else {
+                ctx.save(); ctx.globalAlpha = 0.32; ctx.fillStyle = '#000';
+                ctx.fillRect(-dim.l/2 + 4, -dim.w/2 + 4, dim.l, dim.w); ctx.restore();
+                ctx.fillStyle = trackColor;
+                ctx.fillRect(-dim.l/2 - 2, -dim.w/2 - 4, dim.l + 4, 6);
+                ctx.fillRect(-dim.l/2 - 2, dim.w/2 - 2, dim.l + 4, 6);
+                ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                const gc = Math.floor((dim.l + 4) / 7);
+                for (let g = 0; g < gc; g++) { let gx = -dim.l/2 - 2 + g * 7 + 2; ctx.fillRect(gx, -dim.w/2 - 4, 2, 6); ctx.fillRect(gx, dim.w/2 - 2, 2, 6); }
+                ctx.fillStyle = color; ctx.fillRect(-dim.l/2, -dim.w/2, dim.l, dim.w);
+                ctx.fillStyle = highlightColor; ctx.fillRect(-dim.l/2, -dim.w/2, dim.l * 0.28, dim.w);
+                ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(-dim.l/2, -dim.w/2, dim.l, 3);
+                ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(-dim.l/2 + dim.l*0.28, -dim.w/2); ctx.lineTo(-dim.l/2 + dim.l*0.28, dim.w/2); ctx.stroke();
+            }
             ctx.restore();
+
+            // Team identification ring (always shown when using images)
+            if (hullReady) {
+                ctx.save(); ctx.globalAlpha = 0.75;
+                ctx.beginPath(); ctx.arc(0, 0, dim.w/2 + 6, 0, Math.PI*2);
+                ctx.strokeStyle = teamRing; ctx.lineWidth = 2.5; ctx.stroke();
+                ctx.restore();
+            }
 
             // Turret
             ctx.save();
             ctx.rotate(p.turretAngle);
-            if (dim.t > 0) {
-                ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(2, 2, dim.t, 0, Math.PI*2); ctx.fill(); ctx.restore();
-                ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, dim.t, 0, Math.PI*2); ctx.fill();
-                ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
-                // Turret highlight glint
-                ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(-dim.t*0.25, -dim.t*0.3, dim.t*0.38, 0, Math.PI*2); ctx.fill();
+            if (turretReady) {
+                if (dim.t > 0) {
+                    // Pivot at left edge center; barrel extends right; image height = turret diameter
+                    ctx.drawImage(imgs.turret, 0, -dim.t, dim.b, dim.t * 2);
+                } else {
+                    // Fixed-gun / casemate — draw as slim barrel from center
+                    ctx.drawImage(imgs.turret, 0, -4, dim.b, 8);
+                }
+            } else {
+                if (dim.t > 0) {
+                    ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(2, 2, dim.t, 0, Math.PI*2); ctx.fill(); ctx.restore();
+                    ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, dim.t, 0, Math.PI*2); ctx.fill();
+                    ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
+                    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(-dim.t*0.25, -dim.t*0.3, dim.t*0.38, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.fillStyle = trackColor; ctx.fillRect(0, -2.5, dim.b - 5, 5);
+                ctx.fillStyle = turretColor; ctx.fillRect(dim.b - 5, -3, 7, 6);
+                ctx.fillStyle = trackColor; ctx.fillRect(dim.b - 3, -1, 3, 2);
             }
-            // Barrel
-            ctx.fillStyle = trackColor; ctx.fillRect(0, -2.5, dim.b - 5, 5);
-            // Muzzle brake
-            ctx.fillStyle = turretColor; ctx.fillRect(dim.b - 5, -3, 7, 6);
-            ctx.fillStyle = trackColor; ctx.fillRect(dim.b - 3, -1, 3, 2);
             ctx.restore();
 
-            // Username
+            // Username + enemy HP bar
             ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
             let labelOffset = -dim.w/2 - 18;
             ctx.fillText(p.username, 0, labelOffset);

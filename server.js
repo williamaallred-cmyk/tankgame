@@ -32,6 +32,13 @@ const TANK_STATS = {
     "t90":   { hp: 900,  speed: 3.8, reload: 100, damage: 380, pen: 550, armor: {f: 550, s: 130, r: 45}, range: 1100, accuracy: 0.02, turretSpeed: 0.12, projSpeed: 72, hitbox: 20 }
 };
 
+const TANK_ERAS = {
+    'mkiv': 'WW1', 'a7v': 'WW1', 'ft17': 'WW1',
+    'm4': 'WW2', 't34': 'WW2', 'tiger': 'WW2', 'stug': 'WW2',
+    'm48': 'Cold War', 't55': 'Cold War', 'leo1': 'Cold War',
+    'm1a2': 'Modern Era', 't90': 'Modern Era'
+};
+
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1600;
 
@@ -116,7 +123,7 @@ io.on('connection', (socket) => {
         for (let roomId in activeRooms) {
             let r = activeRooms[roomId];
             if (!r.isPrivate) {
-                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest' });
+                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All' });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
@@ -128,11 +135,14 @@ io.on('connection', (socket) => {
         if (!safeUsername.trim()) safeUsername = "Player";
         const validMaps = ['forest', 'desert', 'city', 'hybrid'];
         const mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
+        const validEras = ['All', 'WW1', 'WW2', 'Cold War', 'Modern Era'];
+        const eraRestriction = validEras.includes(data.eraRestriction) ? data.eraRestriction : 'All';
 
         activeRooms[roomId] = {
             id: roomId,
             name: data.roomName || "Custom Match",
             mapType: mapType,
+            eraRestriction: eraRestriction,
             isPrivate: data.isPrivate === 'private',
             password: data.password || "",
             maxPlayers: parseInt(data.maxPlayers) || 5,
@@ -142,6 +152,10 @@ io.on('connection', (socket) => {
             winner: null
         };
 
+        if (eraRestriction !== 'All' && TANK_ERAS[data.tankId] !== eraRestriction) {
+            delete activeRooms[roomId];
+            return socket.emit('lobbyError', `This room requires ${eraRestriction} era tanks.`);
+        }
         joinRoom(socket, roomId, data.tankId, safeUsername);
     });
 
@@ -150,6 +164,9 @@ io.on('connection', (socket) => {
         if (!room) return socket.emit('lobbyError', "Room not found.");
         if (room.isPrivate && room.password !== data.password) return socket.emit('lobbyError', "Incorrect password.");
         if (Object.keys(room.players).length >= room.maxPlayers) return socket.emit('lobbyError', "Room is full.");
+        if (room.eraRestriction && room.eraRestriction !== 'All' && TANK_ERAS[data.tankId] !== room.eraRestriction) {
+            return socket.emit('lobbyError', `This room is ${room.eraRestriction} era only. Switch your tank in the lobby.`);
+        }
         
         let safeUsername = filter.check(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
@@ -178,12 +195,13 @@ io.on('connection', (socket) => {
             debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
         };
 
-        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', trees: room.trees });
+        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', eraRestriction: room.eraRestriction || 'All', trees: room.trees });
     }
 
     socket.on('changeTank', (newTankId) => {
         let room = activeRooms[socket.roomId];
         if (room && room.players[socket.id]) {
+            if (room.eraRestriction && room.eraRestriction !== 'All' && TANK_ERAS[newTankId] !== room.eraRestriction) return;
             room.players[socket.id].tankTypeId = newTankId;
         }
     });
