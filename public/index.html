@@ -207,6 +207,14 @@
             "t90":   { w: 21, l: 38, t: 11, b: 30 }
         };
 
+        // Turret shape per tank: round | angular | wedge | fixed
+        const TANK_TURRET = {
+            "mkiv": 'fixed', "a7v": 'fixed',  "ft17": 'round',
+            "m4":   'round',  "t34": 'round',  "tiger": 'angular', "stug": 'fixed',
+            "m48":  'round',  "t55": 'round',  "leo1":  'angular',
+            "m1a2": 'wedge',  "t90": 'angular'
+        };
+
         const WORLD_WIDTH = 2400;
         const WORLD_HEIGHT = 1600;
 
@@ -484,6 +492,9 @@
             const turretColor = isMe ? '#15803d' : '#b91c1c';
             const highlightColor = isMe ? '#1d8a42' : '#bb2828';
             const teamRing = isMe ? '#22c55e' : '#ef4444';
+            const turretType = TANK_TURRET[p.tankTypeId] || 'round';
+            // Fixed-gun tanks: snap turret to hull angle client-side to eliminate interpolation lag
+            const effectiveTurretAngle = (turretType === 'fixed') ? p.angle : p.turretAngle;
 
             // Hull
             ctx.save();
@@ -517,25 +528,59 @@
 
             // Turret
             ctx.save();
-            ctx.rotate(p.turretAngle);
+            ctx.rotate(effectiveTurretAngle);
+            const t = dim.t, b = dim.b;
+
             if (turretReady) {
-                if (dim.t > 0) {
-                    // Pivot at left edge center; barrel extends right; image height = turret diameter
-                    ctx.drawImage(imgs.turret, 0, -dim.t, dim.b, dim.t * 2);
-                } else {
-                    // Fixed-gun / casemate — draw as slim barrel from center
-                    ctx.drawImage(imgs.turret, 0, -4, dim.b, 8);
-                }
+                if (t > 0) { ctx.drawImage(imgs.turret, 0, -t, b, t * 2); }
+                else       { ctx.drawImage(imgs.turret, 0, -4, b, 8); }
+            } else if (turretType === 'round') {
+                // Classic circular turret (FT-17, Sherman, T-34, Patton, T-55)
+                ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(2, 2, t, 0, Math.PI*2); ctx.fill(); ctx.restore();
+                ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, t, 0, Math.PI*2); ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
+                ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(-t*0.25, -t*0.3, t*0.38, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = trackColor; ctx.fillRect(t, -2.5, b - t - 5, 5);
+                ctx.fillStyle = turretColor; ctx.fillRect(b - 5, -3, 7, 6);
+                ctx.fillStyle = trackColor; ctx.fillRect(b - 3, -1, 3, 2);
+
+            } else if (turretType === 'angular') {
+                // Hexagonal angular turret (Tiger I, Leopard 1, T-90)
+                ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000';
+                ctx.beginPath(); ctx.moveTo(-t*.5+2,-t*.85+2); ctx.lineTo(t*.6+2,-t*.85+2); ctx.lineTo(t+2,2); ctx.lineTo(t*.6+2,t*.85+2); ctx.lineTo(-t*.5+2,t*.85+2); ctx.lineTo(-t*.8+2,2); ctx.closePath(); ctx.fill(); ctx.restore();
+                ctx.fillStyle = turretColor;
+                ctx.beginPath(); ctx.moveTo(-t*.5,-t*.85); ctx.lineTo(t*.6,-t*.85); ctx.lineTo(t,0); ctx.lineTo(t*.6,t*.85); ctx.lineTo(-t*.5,t*.85); ctx.lineTo(-t*.8,0); ctx.closePath(); ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
+                // Top-plate highlight
+                ctx.fillStyle = highlightColor;
+                ctx.beginPath(); ctx.moveTo(-t*.5,-t*.85); ctx.lineTo(t*.6,-t*.85); ctx.lineTo(t*.3,-t*.4); ctx.lineTo(-t*.4,-t*.4); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = trackColor; ctx.fillRect(t, -2.5, b - t - 5, 5);
+                ctx.fillStyle = turretColor; ctx.fillRect(b - 5, -3, 7, 6);
+                ctx.fillStyle = trackColor; ctx.fillRect(b - 3, -1, 3, 2);
+
+            } else if (turretType === 'wedge') {
+                // Abrams-style angular wedge turret (M1A2)
+                ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000';
+                ctx.beginPath(); ctx.moveTo(-t*.3+2,-t*.7+2); ctx.lineTo(t*.7+2,-t*1+2); ctx.lineTo(t*1.1+2,-t*.45+2); ctx.lineTo(t*1.1+2,t*.45+2); ctx.lineTo(t*.7+2,t*1+2); ctx.lineTo(-t*.3+2,t*.7+2); ctx.lineTo(-t*.7+2,2); ctx.closePath(); ctx.fill(); ctx.restore();
+                ctx.fillStyle = turretColor;
+                ctx.beginPath(); ctx.moveTo(-t*.3,-t*.7); ctx.lineTo(t*.7,-t*1); ctx.lineTo(t*1.1,-t*.45); ctx.lineTo(t*1.1,t*.45); ctx.lineTo(t*.7,t*1); ctx.lineTo(-t*.3,t*.7); ctx.lineTo(-t*.7,0); ctx.closePath(); ctx.fill();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
+                // Sloped front face highlight
+                ctx.fillStyle = highlightColor;
+                ctx.beginPath(); ctx.moveTo(-t*.3,-t*.7); ctx.lineTo(t*.7,-t*1); ctx.lineTo(t*.4,-t*.5); ctx.lineTo(-t*.2,-t*.35); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = trackColor; ctx.fillRect(t*1.1, -2, b - t*1.1 - 4, 4);
+                ctx.fillStyle = turretColor; ctx.fillRect(b - 4, -2.5, 6, 5);
+                ctx.fillStyle = trackColor; ctx.fillRect(b - 2, -1, 3, 2);
+
             } else {
-                if (dim.t > 0) {
-                    ctx.save(); ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(2, 2, dim.t, 0, Math.PI*2); ctx.fill(); ctx.restore();
-                    ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, dim.t, 0, Math.PI*2); ctx.fill();
-                    ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.stroke();
-                    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(-dim.t*0.25, -dim.t*0.3, dim.t*0.38, 0, Math.PI*2); ctx.fill();
-                }
-                ctx.fillStyle = trackColor; ctx.fillRect(0, -2.5, dim.b - 5, 5);
-                ctx.fillStyle = turretColor; ctx.fillRect(dim.b - 5, -3, 7, 6);
-                ctx.fillStyle = trackColor; ctx.fillRect(dim.b - 3, -1, 3, 2);
+                // fixed — StuG casemate / WW1 hull-mounted gun mantlet
+                const mh = Math.max(9, dim.w * 0.45);
+                ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.fillRect(2, -mh/2+2, 14, mh); ctx.restore();
+                ctx.fillStyle = turretColor; ctx.fillRect(0, -mh/2, 14, mh);
+                ctx.fillStyle = highlightColor; ctx.fillRect(0, -mh/2, 14, mh * 0.3);
+                ctx.lineWidth = 1.5; ctx.strokeStyle = trackColor; ctx.strokeRect(0, -mh/2, 14, mh);
+                ctx.fillStyle = trackColor; ctx.fillRect(14, -2, b - 16, 4);
+                ctx.fillStyle = turretColor; ctx.fillRect(b - 2, -2.5, 4, 5);
             }
             ctx.restore();
 

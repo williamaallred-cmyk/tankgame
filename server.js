@@ -39,6 +39,9 @@ const TANK_ERAS = {
     'm1a2': 'Modern Era', 't90': 'Modern Era'
 };
 
+// Tanks whose guns are fixed to the hull — turret cannot rotate independently
+const FIXED_GUN_TANKS = new Set(['mkiv', 'a7v', 'stug']);
+
 const WORLD_WIDTH = 2400;
 const WORLD_HEIGHT = 1600;
 
@@ -268,15 +271,19 @@ setInterval(() => {
             p.x = Math.max(20, Math.min(WORLD_WIDTH - 20, p.x));
             p.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, p.y));
 
-            let targetAngle = Math.atan2(i.mouseY - p.y, i.mouseX - p.x);
-            let aDiff = targetAngle - p.turretAngle;
-            while (aDiff < -Math.PI) aDiff += Math.PI * 2;
-            while (aDiff > Math.PI) aDiff -= Math.PI * 2;
+            if (FIXED_GUN_TANKS.has(p.tankTypeId)) {
+                p.turretAngle = p.angle; // gun locked to hull
+            } else {
+                let targetAngle = Math.atan2(i.mouseY - p.y, i.mouseX - p.x);
+                let aDiff = targetAngle - p.turretAngle;
+                while (aDiff < -Math.PI) aDiff += Math.PI * 2;
+                while (aDiff > Math.PI) aDiff -= Math.PI * 2;
 
-            let currentTurretSpeed = (p.debuffs.turret > 0) ? stats.turretSpeed * 0.2 : stats.turretSpeed;
+                let currentTurretSpeed = (p.debuffs.turret > 0) ? stats.turretSpeed * 0.2 : stats.turretSpeed;
 
-            if (Math.abs(aDiff) < currentTurretSpeed) p.turretAngle = targetAngle;
-            else p.turretAngle += Math.sign(aDiff) * currentTurretSpeed;
+                if (Math.abs(aDiff) < currentTurretSpeed) p.turretAngle = targetAngle;
+                else p.turretAngle += Math.sign(aDiff) * currentTurretSpeed;
+            }
 
             if (p.reloadCooldown > 0) p.reloadCooldown--;
 
