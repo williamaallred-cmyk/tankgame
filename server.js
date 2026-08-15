@@ -15,9 +15,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const TANK_STATS = {
     // WW1
-    "mkiv":  { hp: 400, speed: 1.5, reload: 180, damage: 100, pen: 30, armor: {f: 15, s: 12, r: 12}, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24, hitbox: 24 },
-    "a7v":   { hp: 500, speed: 1.2, reload: 200, damage: 100, pen: 30, armor: {f: 30, s: 15, r: 15}, range: 400, accuracy: 0.15, turretSpeed: 0.02, projSpeed: 24, hitbox: 22 },
-    "ft17":  { hp: 200, speed: 2.5, reload: 120, damage: 80,  pen: 25, armor: {f: 16, s: 8, r: 8},   range: 350, accuracy: 0.12, turretSpeed: 0.04, projSpeed: 20, hitbox: 12 },
+    "mkiv":  { hp: 480, speed: 1.8, reload: 175, damage: 115, pen: 32, armor: {f: 18, s: 14, r: 14}, range: 420, accuracy: 0.13, turretSpeed: 0.025, projSpeed: 26, hitbox: 24 },
+    "a7v":   { hp: 560, speed: 1.5, reload: 190, damage: 115, pen: 32, armor: {f: 35, s: 18, r: 18}, range: 420, accuracy: 0.13, turretSpeed: 0.025, projSpeed: 26, hitbox: 22 },
+    "ft17":  { hp: 240, speed: 2.8, reload: 115, damage: 95,  pen: 28, armor: {f: 18, s: 10, r: 10}, range: 370, accuracy: 0.11, turretSpeed: 0.045, projSpeed: 22, hitbox: 12 },
     // WW2
     "m4":    { hp: 500, speed: 3.0, reload: 120, damage: 150, pen: 120, armor: {f: 50, s: 38, r: 38},  range: 600, accuracy: 0.08, turretSpeed: 0.06, projSpeed: 36, hitbox: 18 },
     "t34":   { hp: 500, speed: 3.2, reload: 110, damage: 150, pen: 110, armor: {f: 45, s: 45, r: 40},  range: 550, accuracy: 0.10, turretSpeed: 0.05, projSpeed: 36, hitbox: 18 },
@@ -37,18 +37,35 @@ const WORLD_HEIGHT = 1600;
 
 let activeRooms = {}; 
 
-function generateTrees() {
-    let trees = [];
-    for (let i = 0; i < 40; i++) {
-        trees.push({
-            x: Math.random() * (WORLD_WIDTH - 100) + 50,
-            y: Math.random() * (WORLD_HEIGHT - 100) + 50,
-            radius: Math.random() * 20 + 20,
-            hp: 3,
-            swayOffset: Math.random() * 100
-        });
+function generateObstacles(mapType) {
+    let obstacles = [];
+    if (mapType === 'desert') {
+        for (let i = 0; i < 10; i++) {
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: 5, swayOffset: 0, type: 'rock' });
+        }
+    } else if (mapType === 'city') {
+        for (let i = 0; i < 22; i++) {
+            let bw = Math.floor(Math.random() * 30) + 45, bh = Math.floor(Math.random() * 25) + 35;
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: 30, swayOffset: 0, type: 'building' });
+        }
+        for (let i = 0; i < 5; i++) {
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 15 + 12, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+        }
+    } else if (mapType === 'hybrid') {
+        for (let i = 0; i < 28; i++) {
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 18 + 15, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+        }
+        for (let i = 0; i < 10; i++) {
+            let bw = Math.floor(Math.random() * 25) + 40, bh = Math.floor(Math.random() * 20) + 30;
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: 25, swayOffset: 0, type: 'building' });
+        }
+    } else {
+        // forest (default)
+        for (let i = 0; i < 55; i++) {
+            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 20 + 18, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+        }
     }
-    return trees;
+    return obstacles;
 }
 
 function getRandomSpawn(room) {
@@ -99,7 +116,7 @@ io.on('connection', (socket) => {
         for (let roomId in activeRooms) {
             let r = activeRooms[roomId];
             if (!r.isPrivate) {
-                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers });
+                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest' });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
@@ -109,16 +126,19 @@ io.on('connection', (socket) => {
         let roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
         let safeUsername = filter.check(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
+        const validMaps = ['forest', 'desert', 'city', 'hybrid'];
+        const mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
 
         activeRooms[roomId] = {
             id: roomId,
             name: data.roomName || "Custom Match",
+            mapType: mapType,
             isPrivate: data.isPrivate === 'private',
             password: data.password || "",
             maxPlayers: parseInt(data.maxPlayers) || 5,
             players: {},
             projectiles: [],
-            trees: generateTrees(),
+            trees: generateObstacles(mapType),
             winner: null
         };
 
@@ -158,7 +178,7 @@ io.on('connection', (socket) => {
             debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
         };
 
-        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, trees: room.trees });
+        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', trees: room.trees });
     }
 
     socket.on('changeTank', (newTankId) => {
@@ -335,10 +355,10 @@ setInterval(() => {
 
                             if (isCrit) {
                                 let r = Math.random();
-                                if (r < 0.25) { p.debuffs.track = 900; critText = "MOBILITY HIT!"; }
-                                else if (r < 0.5) { p.debuffs.engine = 900; critText = "ENGINE DAMAGED!"; }
-                                else if (r < 0.75) { p.debuffs.turret = 900; critText = "WEAPON JAMMED!"; }
-                                else { p.debuffs.gun = 900; critText = "GUN BARREL WRECKED!"; }
+                                if (r < 0.25) { p.debuffs.track = 600; critText = "MOBILITY HIT!"; }
+                                else if (r < 0.5) { p.debuffs.engine = 600; critText = "ENGINE DAMAGED!"; }
+                                else if (r < 0.75) { p.debuffs.turret = 600; critText = "WEAPON JAMMED!"; }
+                                else { p.debuffs.gun = 600; critText = "GUN BARREL WRECKED!"; }
                             }
 
                             io.to(roomId).emit('effect', { type: 'hitTank', x: hitResult.hitX, y: hitResult.hitY, damage: finalDamage, critText: critText });
@@ -357,7 +377,7 @@ setInterval(() => {
                                     setTimeout(() => {
                                         if(room.players[pId]) {
                                             let s = getRandomSpawn(room);
-                                            p.x = s.x; p.y = s.y; p.hp = stats.hp; p.debuffs = { track: 0, engine: 0, turret: 0, gun: 0 };
+                                            p.x = s.x; p.y = s.y; p.angle = s.angle; p.turretAngle = s.angle; p.hp = stats.hp; p.reloadCooldown = 0; p.debuffs = { track: 0, engine: 0, turret: 0, gun: 0 };
                                         }
                                     }, 3000);
                                 }
