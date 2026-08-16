@@ -109,10 +109,11 @@ function getRandomSpawn(room) {
         
         valid = true;
         for (let tree of room.trees) {
-            if (dist(spawn.x, spawn.y, tree.x, tree.y) < tree.radius + 35) {
-                valid = false;
-                break;
-            }
+            const margin = 35;
+            const tooClose = (tree.w && tree.h)
+                ? Math.abs(spawn.x - tree.x) < tree.w/2 + margin && Math.abs(spawn.y - tree.y) < tree.h/2 + margin
+                : dist(spawn.x, spawn.y, tree.x, tree.y) < tree.radius + margin;
+            if (tooClose) { valid = false; break; }
         }
         attempts++;
     }
@@ -133,6 +134,20 @@ function pointSegmentDist(px, py, x1, y1, x2, y2) {
     else { xx = x1 + param * C; yy = y1 + param * D; }
     let dx = px - xx; let dy = py - yy;
     return { distance: Math.hypot(dx, dy), hitX: xx, hitY: yy };
+}
+
+// Liang-Barsky segment vs AABB — returns {hitX,hitY} at entry point, or null
+function segmentIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1-(rx-rw/2), (rx+rw/2)-x1, y1-(ry-rh/2), (ry+rh/2)-y1];
+    let t0 = 0, t1 = 1;
+    for (let i = 0; i < 4; i++) {
+        if (p[i] === 0) { if (q[i] < 0) return null; }
+        else { const t = q[i]/p[i]; if (p[i] < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); }
+        if (t0 > t1) return null;
+    }
+    return { hitX: x1 + t0*dx, hitY: y1 + t0*dy };
 }
 
 io.on('connection', (socket) => {
@@ -276,10 +291,10 @@ setInterval(() => {
 
             let canMove = true;
             for (let tree of room.trees) {
-                if (dist(nextX, nextY, tree.x, tree.y) < tree.radius + stats.hitbox) {
-                    canMove = false;
-                    break;
-                }
+                const blocked = (tree.w && tree.h)
+                    ? Math.abs(nextX - tree.x) < tree.w/2 + stats.hitbox && Math.abs(nextY - tree.y) < tree.h/2 + stats.hitbox
+                    : dist(nextX, nextY, tree.x, tree.y) < tree.radius + stats.hitbox;
+                if (blocked) { canMove = false; break; }
             }
 
             if (canMove) {
@@ -345,12 +360,17 @@ setInterval(() => {
             if (!hit) {
                 for (let k = room.trees.length - 1; k >= 0; k--) {
                     let t = room.trees[k];
-                    let hitResult = pointSegmentDist(t.x, t.y, oldX, oldY, proj.x, proj.y);
-                    
-                    if (hitResult.distance < t.radius) {
+                    let effHit = null;
+                    if (t.w && t.h) {
+                        effHit = segmentIntersectsRect(oldX, oldY, proj.x, proj.y, t.x, t.y, t.w, t.h);
+                    } else {
+                        const cr = pointSegmentDist(t.x, t.y, oldX, oldY, proj.x, proj.y);
+                        if (cr.distance < t.radius) effHit = { hitX: cr.hitX, hitY: cr.hitY };
+                    }
+                    if (effHit) {
                         hit = true;
                         t.hp--;
-                        io.to(roomId).emit('effect', { type: 'hitTree', x: hitResult.hitX, y: hitResult.hitY });
+                        io.to(roomId).emit('effect', { type: 'hitTree', x: effHit.hitX, y: effHit.hitY });
                         if (t.hp <= 0) {
                             io.to(roomId).emit('effect', { type: 'obstacleRemoved', id: t.id, x: t.x, y: t.y, radius: t.radius });
                             room.trees.splice(k, 1);
