@@ -513,7 +513,22 @@ setInterval(() => {
                                 if (killer && killer.kills >= 10) {
                                     room.winner = killer;
                                     io.to(roomId).emit('gameOver', { winnerName: killer.username });
-                                    setTimeout(() => { delete activeRooms[roomId]; }, 5000);
+                                    setTimeout(() => {
+                                        if (!activeRooms[roomId]) return; // room was cleaned up (all humans left)
+                                        // Reset room for new round
+                                        room.winner = null;
+                                        room.projectiles = [];
+                                        room.trees = generateObstacles(room.mapType || 'forest', room.destructible || false);
+                                        for (let pid in room.players) {
+                                            let rp = room.players[pid];
+                                            let rs = TANK_STATS[rp.tankTypeId] || TANK_STATS['m4'];
+                                            let sp = getRandomSpawn(room);
+                                            rp.x = sp.x; rp.y = sp.y; rp.angle = sp.angle; rp.turretAngle = sp.angle;
+                                            rp.hp = rs.hp; rp.maxHp = rs.hp; rp.kills = 0; rp.reloadCooldown = 0;
+                                            rp.debuffs = { track: 0, engine: 0, turret: 0, gun: 0 };
+                                        }
+                                        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', eraRestriction: room.eraRestriction || 'All', destructible: room.destructible || false, trees: room.trees });
+                                    }, 5000);
                                 } else {
                                     setTimeout(() => {
                                         if(room.players[pId]) {
