@@ -47,32 +47,49 @@ const WORLD_HEIGHT = 1600;
 
 let activeRooms = {}; 
 
-function generateObstacles(mapType) {
+function generateObstacles(mapType, destructible) {
     let obstacles = [];
+    let id = 0;
+    const treeHp = destructible ? 3    : 9999;
+    const rockHp = destructible ? 5    : 9999;
+    const bldHp  = destructible ? 15   : 9999;
+
     if (mapType === 'desert') {
         for (let i = 0; i < 10; i++) {
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: 5, swayOffset: 0, type: 'rock' });
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: rockHp, swayOffset: 0, type: 'rock' });
         }
     } else if (mapType === 'city') {
-        for (let i = 0; i < 22; i++) {
-            let bw = Math.floor(Math.random() * 30) + 45, bh = Math.floor(Math.random() * 25) + 35;
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: 30, swayOffset: 0, type: 'building' });
+        // Structured grid with regular streets (80px) + wide avenues/boulevards
+        const BLD_W = 95, BLD_H = 65, STREET = 80;
+        const CELL_W = BLD_W + STREET, CELL_H = BLD_H + STREET; // 175 x 145
+        const MX = 90, MY = 85;
+        const cols = Math.floor((WORLD_WIDTH  - MX * 2) / CELL_W); // ~12
+        const rows = Math.floor((WORLD_HEIGHT - MY * 2) / CELL_H); // ~9
+        for (let c = 0; c < cols; c++) {
+            if (c % 5 === 4) continue; // wide avenue every 5 columns
+            for (let r = 0; r < rows; r++) {
+                if (r % 4 === 3) continue; // wide boulevard every 4 rows
+                if (Math.random() < 0.08) continue; // occasional empty lot
+                const bw = BLD_W - Math.floor(Math.random() * 18);
+                const bh = BLD_H - Math.floor(Math.random() * 14);
+                obstacles.push({ id: id++, x: MX + c * CELL_W + BLD_W / 2, y: MY + r * CELL_H + BLD_H / 2, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: bldHp, swayOffset: 0, type: 'building' });
+            }
         }
-        for (let i = 0; i < 5; i++) {
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 15 + 12, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+        for (let i = 0; i < 8; i++) {
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 200) + 100, y: Math.random() * (WORLD_HEIGHT - 200) + 100, radius: Math.random() * 8 + 8, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
         }
     } else if (mapType === 'hybrid') {
         for (let i = 0; i < 28; i++) {
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 18 + 15, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 18 + 15, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
         }
         for (let i = 0; i < 10; i++) {
             let bw = Math.floor(Math.random() * 25) + 40, bh = Math.floor(Math.random() * 20) + 30;
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: 25, swayOffset: 0, type: 'building' });
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: bldHp, swayOffset: 0, type: 'building' });
         }
     } else {
         // forest (default)
         for (let i = 0; i < 55; i++) {
-            obstacles.push({ x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 20 + 18, hp: 3, swayOffset: Math.random() * 100, type: 'tree' });
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 20 + 18, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
         }
     }
     return obstacles;
@@ -83,7 +100,7 @@ function getRandomSpawn(room) {
     let valid = false;
     let attempts = 0;
     
-    while (!valid && attempts < 50) {
+    while (!valid && attempts < 150) {
         spawn = {
             x: Math.random() * (WORLD_WIDTH - 200) + 100,
             y: Math.random() * (WORLD_HEIGHT - 200) + 100,
@@ -126,7 +143,7 @@ io.on('connection', (socket) => {
         for (let roomId in activeRooms) {
             let r = activeRooms[roomId];
             if (!r.isPrivate) {
-                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All' });
+                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All', destructible: r.destructible || false });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
@@ -140,18 +157,20 @@ io.on('connection', (socket) => {
         const mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
         const validEras = ['All', 'WW1', 'WW2', 'Cold War', 'Modern Era'];
         const eraRestriction = validEras.includes(data.eraRestriction) ? data.eraRestriction : 'All';
+        const destructible = data.destructible === true || data.destructible === 'true';
 
         activeRooms[roomId] = {
             id: roomId,
             name: data.roomName || "Custom Match",
             mapType: mapType,
             eraRestriction: eraRestriction,
+            destructible: destructible,
             isPrivate: data.isPrivate === 'private',
             password: data.password || "",
             maxPlayers: parseInt(data.maxPlayers) || 5,
             players: {},
             projectiles: [],
-            trees: generateObstacles(mapType),
+            trees: generateObstacles(mapType, destructible),
             winner: null
         };
 
@@ -198,7 +217,7 @@ io.on('connection', (socket) => {
             debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
         };
 
-        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', eraRestriction: room.eraRestriction || 'All', trees: room.trees });
+        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', eraRestriction: room.eraRestriction || 'All', destructible: room.destructible || false, trees: room.trees });
     }
 
     socket.on('changeTank', (newTankId) => {
@@ -332,7 +351,10 @@ setInterval(() => {
                         hit = true;
                         t.hp--;
                         io.to(roomId).emit('effect', { type: 'hitTree', x: hitResult.hitX, y: hitResult.hitY });
-                        if (t.hp <= 0) room.trees.splice(k, 1);
+                        if (t.hp <= 0) {
+                            io.to(roomId).emit('effect', { type: 'obstacleRemoved', id: t.id, x: t.x, y: t.y, radius: t.radius });
+                            room.trees.splice(k, 1);
+                        }
                         break;
                     }
                 }

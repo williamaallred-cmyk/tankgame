@@ -127,6 +127,10 @@
                                         <option value="Modern Era">Modern Era Only</option>
                                     </select>
                                 </div>
+                                <div class="flex items-center space-x-2 py-1">
+                                    <input type="checkbox" id="destructibleCheck" class="w-4 h-4 rounded accent-emerald-500 cursor-pointer">
+                                    <label for="destructibleCheck" class="text-[10px] text-gray-300 font-bold uppercase cursor-pointer select-none">💥 Destructible Terrain</label>
+                                </div>
                                 <div id="createPasswordContainer" class="hidden">
                                     <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Password</label>
                                     <input type="text" id="createPassword" placeholder="Secret Password" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
@@ -288,7 +292,8 @@
                     : `<button onclick="joinPublicRoom('${r.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 rounded transition">JOIN</button>`;
                 let mapTag = `<span class="text-[9px] text-gray-500 ml-1">${mapEmoji[r.mapType] || '🌲'}</span>`;
                 let eraTag = (r.eraRestriction && r.eraRestriction !== 'All') ? `<span class="text-[9px] bg-amber-900/50 text-amber-400 border border-amber-700/50 px-1 rounded ml-1">${r.eraRestriction}</span>` : '';
-                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}${mapTag}${eraTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
+                let destTag = r.destructible ? `<span class="text-[9px] text-orange-400 ml-1" title="Destructible terrain">💥</span>` : '';
+                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}${mapTag}${eraTag}${destTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
             });
             listEl.innerHTML = domHtml;
         });
@@ -346,8 +351,15 @@
                 for (let i = 0; i < pCount; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*8, vy: (Math.random()-0.5)*8, color: '#f87171', size: 4, life: 15, maxLife: 15 });
                 floatingTexts.push({ x: data.x, y: data.y, text: "-" + data.damage, color: '#fca5a5', life: 45, offset: 0 });
                 if (data.critText) floatingTexts.push({ x: data.x, y: data.y - 15, text: data.critText, color: '#fbbf24', life: 75, offset: 0 });
+            } else if (data.type === 'obstacleRemoved') {
+                // Destruction VFX
+                const r = data.radius || 20;
+                explosions.push({ x: data.x, y: data.y, radius: r * 0.9, color: '#92400e', alpha: 1.0 });
+                explosions.push({ x: data.x, y: data.y, radius: r * 0.5, color: '#ef4444', alpha: 0.9 });
+                for (let i = 0; i < 18; i++) particles.push({ x: data.x + (Math.random()-0.5)*r, y: data.y + (Math.random()-0.5)*r, vx: (Math.random()-0.5)*11, vy: (Math.random()-0.5)*11, color: Math.random() < 0.5 ? '#f59e0b' : '#78350f', size: 5 + Math.random()*3, life: 28, maxLife: 28 });
+                // Remove obstacle from client list
+                trees = trees.filter(obs => obs.id !== data.id);
             }
-        });
 
         function requestRooms() { if (!document.getElementById('lobbyModal').classList.contains('hidden')) socket.emit('requestPublicRooms'); }
         setInterval(requestRooms, 5000); 
@@ -367,7 +379,7 @@
 
         document.getElementById('createBtn').addEventListener('click', () => {
             showLoading("Creating server...");
-            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value, eraRestriction: document.getElementById('eraLockSelect').value });
+            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value, eraRestriction: document.getElementById('eraLockSelect').value, destructible: document.getElementById('destructibleCheck').checked });
         });
 
         document.getElementById('joinPrivateBtn').addEventListener('click', () => {
