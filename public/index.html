@@ -360,6 +360,7 @@
                 // Remove obstacle from client list
                 trees = trees.filter(obs => obs.id !== data.id);
             }
+        });
 
         function requestRooms() { if (!document.getElementById('lobbyModal').classList.contains('hidden')) socket.emit('requestPublicRooms'); }
         setInterval(requestRooms, 5000); 
