@@ -163,6 +163,35 @@ function segmentIntersectsRect(x1, y1, x2, y2, rx, ry, rw, rh) {
     return { hitX: x1 + t0*dx, hitY: y1 + t0*dy };
 }
 
+// Simple bot AI: chase nearest target, aim turret, shoot when aligned
+function updateBotAI(bot, room, stats) {
+    let nearest = null, minDist = Infinity;
+    for (let id in room.players) {
+        let p = room.players[id];
+        if (id === bot.id || p.hp <= 0) continue;
+        let d = dist(bot.x, bot.y, p.x, p.y);
+        if (d < minDist) { minDist = d; nearest = p; }
+    }
+    const i = bot.inputs;
+    if (!nearest) {
+        i.w = true; i.s = false; i.mouseDown = false;
+        if (!bot._wanderTick || --bot._wanderTick <= 0) { bot._wander = (Math.random()-0.5)*2; bot._wanderTick = 60 + Math.floor(Math.random()*120); }
+        i.a = bot._wander < -0.3; i.d = bot._wander > 0.3;
+        return;
+    }
+    const angleToTarget = Math.atan2(nearest.y - bot.y, nearest.x - bot.x);
+    let hullDiff = angleToTarget - bot.angle;
+    while (hullDiff < -Math.PI) hullDiff += Math.PI*2; while (hullDiff > Math.PI) hullDiff -= Math.PI*2;
+    i.a = hullDiff < -0.1; i.d = hullDiff > 0.1;
+    i.w = Math.abs(hullDiff) < 1.3 && minDist > 150;
+    i.s = minDist < 80;
+    i.mouseX = nearest.x + (Math.random()-0.5)*30;
+    i.mouseY = nearest.y + (Math.random()-0.5)*30;
+    let turretDiff = angleToTarget - bot.turretAngle;
+    while (turretDiff < -Math.PI) turretDiff += Math.PI*2; while (turretDiff > Math.PI) turretDiff -= Math.PI*2;
+    i.mouseDown = Math.abs(turretDiff) < 0.25 && minDist < stats.range * 0.75;
+}
+
 io.on('connection', (socket) => {
     socket.emit('init', socket.id);
 
@@ -171,13 +200,18 @@ io.on('connection', (socket) => {
         for (let roomId in activeRooms) {
             let r = activeRooms[roomId];
             if (!r.isPrivate) {
-                publicRooms.push({ id: roomId, name: r.name, playerCount: Object.keys(r.players).length, maxPlayers: r.maxPlayers, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All', destructible: r.destructible || false });
+                const humanCount = Object.values(r.players).filter(p => !p.isBot).length;
+                const bots = Object.values(r.players).filter(p => p.isBot).length;
+                publicRooms.push({ id: roomId, name: r.name, playerCount: humanCount, maxPlayers: r.maxPlayers, botCount: bots, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All', destructible: r.destructible || false });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
     });
 
     socket.on('createRoom', (data) => {
+        if (Object.keys(activeRooms).length >= 50) {
+            return socket.emit('lobbyError', "Server is at capacity. Try again later.");
+        }
         let roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
         let safeUsername = isBad(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
@@ -186,10 +220,13 @@ io.on('connection', (socket) => {
         const validEras = ['All', 'WW1', 'WW2', 'Cold War', 'Modern Era'];
         const eraRestriction = validEras.includes(data.eraRestriction) ? data.eraRestriction : 'All';
         const destructible = data.destructible === true || data.destructible === 'true';
+        const botCount = Math.min(4, Math.max(0, parseInt(data.botCount) || 0));
+        const safeRoomName = String(data.roomName || '').replace(/[<>&"]/g, '').substring(0, 20).trim() || 'Custom Match';
+        const roomName = isBad(safeRoomName) ? 'Custom Match' : safeRoomName;
 
         activeRooms[roomId] = {
             id: roomId,
-            name: data.roomName || "Custom Match",
+            name: roomName,
             mapType: mapType,
             eraRestriction: eraRestriction,
             destructible: destructible,
@@ -206,6 +243,27 @@ io.on('connection', (socket) => {
             delete activeRooms[roomId];
             return socket.emit('lobbyError', `This room requires ${eraRestriction} era tanks.`);
         }
+
+        // Spawn AI bots before the human joins so they appear on gameStart
+        const botTankPool = eraRestriction === 'All'
+            ? Object.keys(TANK_STATS)
+            : Object.keys(TANK_ERAS).filter(k => TANK_ERAS[k] === eraRestriction);
+        const botNames = ['Rommel', 'Patton', 'Zhukov', 'Bradley', 'Guderian', 'Konev'];
+        for (let b = 0; b < botCount; b++) {
+            const tankId = botTankPool[Math.floor(Math.random() * botTankPool.length)];
+            const botStats = TANK_STATS[tankId];
+            const spawn = getRandomSpawn(activeRooms[roomId]);
+            const botId = `bot_${roomId}_${b}`;
+            activeRooms[roomId].players[botId] = {
+                id: botId, username: botNames[b % botNames.length], tankTypeId: tankId,
+                x: spawn.x, y: spawn.y, angle: spawn.angle, turretAngle: spawn.angle,
+                hp: botStats.hp, maxHp: botStats.hp, kills: 0, reloadCooldown: 0,
+                isBot: true, _wander: 0, _wanderTick: 0,
+                inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false },
+                debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
+            };
+        }
+
         joinRoom(socket, roomId, data.tankId, safeUsername);
     });
 
@@ -213,7 +271,8 @@ io.on('connection', (socket) => {
         let room = activeRooms[data.roomId];
         if (!room) return socket.emit('lobbyError', "Room not found.");
         if (room.isPrivate && room.password !== data.password) return socket.emit('lobbyError', "Incorrect password.");
-        if (Object.keys(room.players).length >= room.maxPlayers) return socket.emit('lobbyError', "Room is full.");
+        const humanCount = Object.values(room.players).filter(p => !p.isBot).length;
+        if (humanCount >= room.maxPlayers) return socket.emit('lobbyError', "Room is full.");
         if (room.eraRestriction && room.eraRestriction !== 'All' && TANK_ERAS[data.tankId] !== room.eraRestriction) {
             return socket.emit('lobbyError', `This room is ${room.eraRestriction} era only. Switch your tank in the lobby.`);
         }
@@ -267,7 +326,8 @@ io.on('connection', (socket) => {
         let room = activeRooms[socket.roomId];
         if (room) {
             delete room.players[socket.id];
-            if (Object.keys(room.players).length === 0) {
+            const humanCount = Object.values(room.players).filter(p => !p.isBot).length;
+            if (humanCount === 0) {
                 delete activeRooms[socket.roomId];
             }
         }
@@ -284,6 +344,7 @@ setInterval(() => {
             if (p.hp <= 0) continue;
 
             let stats = TANK_STATS[p.tankTypeId];
+            if (p.isBot) updateBotAI(p, room, stats);
             let i = p.inputs;
 
             if (p.debuffs.track > 0) p.debuffs.track--;

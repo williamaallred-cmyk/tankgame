@@ -127,6 +127,16 @@
                                         <option value="Modern Era">Modern Era Only</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">AI Bots</label>
+                                    <select id="botCountSelect" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                        <option value="0">No Bots</option>
+                                        <option value="1">1 Bot</option>
+                                        <option value="2">2 Bots</option>
+                                        <option value="3">3 Bots</option>
+                                        <option value="4">4 Bots</option>
+                                    </select>
+                                </div>
                                 <div class="flex items-center space-x-2 py-1">
                                     <input type="checkbox" id="destructibleCheck" class="w-4 h-4 rounded accent-emerald-500 cursor-pointer">
                                     <label for="destructibleCheck" class="text-[10px] text-gray-300 font-bold uppercase cursor-pointer select-none">💥 Destructible Terrain</label>
@@ -291,9 +301,10 @@
                     ? `<button disabled class="w-full bg-gray-700 text-gray-500 text-[10px] font-bold py-1 rounded cursor-not-allowed">FULL</button>`
                     : `<button onclick="joinPublicRoom('${r.id}')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold py-1 rounded transition">JOIN</button>`;
                 let mapTag = `<span class="text-[9px] text-gray-500 ml-1">${mapEmoji[r.mapType] || '🌲'}</span>`;
-                let eraTag = (r.eraRestriction && r.eraRestriction !== 'All') ? `<span class="text-[9px] bg-amber-900/50 text-amber-400 border border-amber-700/50 px-1 rounded ml-1">${r.eraRestriction}</span>` : '';
+                let eraTag = (r.eraRestriction && r.eraRestriction !== 'All') ? `<span class="text-[9px] bg-amber-900/50 text-amber-400 border border-amber-700/50 px-1 rounded ml-1">${escHtml(r.eraRestriction)}</span>` : '';
                 let destTag = r.destructible ? `<span class="text-[9px] text-orange-400 ml-1" title="Destructible terrain">💥</span>` : '';
-                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${r.name}${mapTag}${eraTag}${destTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
+                let botTag = r.botCount > 0 ? `<span class="text-[9px] text-blue-400 ml-1" title="${r.botCount} AI bot${r.botCount > 1 ? 's' : ''}">🤖${r.botCount}</span>` : '';
+                domHtml += `<div class="grid grid-cols-12 gap-2 p-2 border-b border-gray-800 items-center hover:bg-gray-800/50 transition rounded"><div class="col-span-6 text-xs text-emerald-200 font-bold truncate">${escHtml(r.name)}${mapTag}${eraTag}${destTag}${botTag}</div><div class="col-span-3 text-center text-[10px] text-gray-400">${r.playerCount} / ${r.maxPlayers}</div><div class="col-span-3">${btnHtml}</div></div>`;
             });
             listEl.innerHTML = domHtml;
         });
@@ -380,7 +391,7 @@
 
         document.getElementById('createBtn').addEventListener('click', () => {
             showLoading("Creating server...");
-            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value, eraRestriction: document.getElementById('eraLockSelect').value, destructible: document.getElementById('destructibleCheck').checked });
+            socket.emit('createRoom', { tankId: document.getElementById('tankSelect').value, username: document.getElementById('usernameInput').value, roomName: document.getElementById('createRoomName').value, maxPlayers: document.getElementById('maxPlayersInput').value, isPrivate: document.getElementById('privacySelect').value, password: document.getElementById('createPassword').value, mapType: document.getElementById('mapTypeSelect').value, eraRestriction: document.getElementById('eraLockSelect').value, destructible: document.getElementById('destructibleCheck').checked, botCount: document.getElementById('botCountSelect').value });
         });
 
         document.getElementById('joinPrivateBtn').addEventListener('click', () => {
@@ -457,7 +468,7 @@
             let lbHtml = '';
             sorted.forEach(p => {
                 let isMe = p.id === myId; let textColor = isMe ? 'text-emerald-300 font-bold' : 'text-gray-300';
-                lbHtml += `<li class="flex justify-between text-xs items-center p-1 ${isMe ? 'bg-emerald-900/30 rounded' : ''}"><span class="${textColor} truncate max-w-[120px]">${p.username}</span><span class="text-amber-400 font-black">${p.kills} <span class="text-[9px] text-gray-500 font-normal">K</span></span></li>`;
+                lbHtml += `<li class="flex justify-between text-xs items-center p-1 ${isMe ? 'bg-emerald-900/30 rounded' : ''}"><span class="${textColor} truncate max-w-[120px]">${p.isBot ? '\uD83E\uDD16 ' : ''}${escHtml(p.username)}</span><span class="text-amber-400 font-black">${p.kills} <span class="text-[9px] text-gray-500 font-normal">K</span></span></li>`;
             });
             document.getElementById('leaderboardList').innerHTML = lbHtml;
         }
@@ -600,7 +611,7 @@
             // Username + enemy HP bar
             ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'; ctx.font = 'bold 11px Inter'; ctx.textAlign = 'center';
             let labelOffset = -dim.w/2 - 18;
-            ctx.fillText(p.username, 0, labelOffset);
+            ctx.fillText((p.isBot ? '🤖' : '') + p.username, 0, labelOffset);
             if (!isMe) {
                 ctx.fillStyle = '#111'; ctx.fillRect(-15, labelOffset + 5, 30, 4);
                 ctx.fillStyle = '#ef4444'; ctx.fillRect(-15, labelOffset + 5, 30 * (p.hp / p.maxHp), 4);
