@@ -11,6 +11,19 @@ const filter = require('leo-profanity');
 filter.loadDictionary('en');
 filter.add(['bitch', 'fucku', 'fuk', 'shit', 'cunt', 'asshole']);
 
+// Normalize leet-speak and common substitutions before profanity check
+// so that sh1t, @ss, f*ck, etc. are caught as easily as their plain forms
+function normForFilter(str) {
+    return str.toLowerCase()
+        .replace(/0/g,'o').replace(/1/g,'i').replace(/3/g,'e')
+        .replace(/4/g,'a').replace(/5/g,'s').replace(/6/g,'b')
+        .replace(/7/g,'t').replace(/8/g,'b').replace(/9/g,'g')
+        .replace(/@/g,'a').replace(/\$/g,'s').replace(/!/g,'i')
+        .replace(/\+/g,'t').replace(/\|/g,'i').replace(/\*/g,'')
+        .replace(/[^a-z]/g,'');
+}
+function isBad(str) { return filter.check(str) || filter.check(normForFilter(str)); }
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const TANK_STATS = {
@@ -166,7 +179,7 @@ io.on('connection', (socket) => {
 
     socket.on('createRoom', (data) => {
         let roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
-        let safeUsername = filter.check(data.username) ? "TrollTank" : data.username;
+        let safeUsername = isBad(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
         const validMaps = ['forest', 'desert', 'city', 'hybrid'];
         const mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
@@ -205,7 +218,7 @@ io.on('connection', (socket) => {
             return socket.emit('lobbyError', `This room is ${room.eraRestriction} era only. Switch your tank in the lobby.`);
         }
         
-        let safeUsername = filter.check(data.username) ? "TrollTank" : data.username;
+        let safeUsername = isBad(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
 
         joinRoom(socket, data.roomId, data.tankId, safeUsername);
