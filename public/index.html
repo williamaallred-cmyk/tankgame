@@ -264,6 +264,8 @@
                 const hull = new Image(), turret = new Image();
                 hull.src = `/tanks/${t.id}_hull.png`;
                 turret.src = `/tanks/${t.id}_turret.png`;
+                hull.onerror = () => {};   // silently fall back to canvas shapes
+                turret.onerror = () => {};
                 tankImages[t.id] = { hull, turret };
             }
         }
@@ -285,6 +287,11 @@
             else { xx = x1 + param * C; yy = y1 + param * D; }
             let dx = px - xx; let dy = py - yy;
             return Math.hypot(dx, dy);
+        }
+
+        // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
+        function escHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
         socket.on('init', (id) => { myId = id; requestRooms(); });
