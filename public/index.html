@@ -301,7 +301,7 @@
             const listEl = document.getElementById('serverBrowserList');
             if (rooms.length === 0) return listEl.innerHTML = `<div class="text-center text-gray-500 text-xs mt-4">No active public matches found.</div>`;
             
-            const mapEmoji = { forest: '🌲', desert: '🏜', city: '🏙', hybrid: '⚔' };
+            const mapEmoji = { forest: '🌲', desert: '🏜', city: '🏙', hybrid: '⚔', random: '🎲' };
             let domHtml = '';
             rooms.forEach(r => {
                 let isFull = r.playerCount >= r.maxPlayers;
