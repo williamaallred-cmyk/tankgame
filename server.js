@@ -394,6 +394,7 @@ setInterval(() => {
 
             let canMove = true;
             for (let tree of room.trees) {
+                if (tree.type === 'hideout') continue; // hideouts don't block movement, tanks can drive through them
                 const blocked = (tree.w && tree.h)
                     ? Math.abs(nextX - tree.x) < tree.w/2 + stats.hitbox && Math.abs(nextY - tree.y) < tree.h/2 + stats.hitbox
                     : dist(nextX, nextY, tree.x, tree.y) < tree.radius + stats.hitbox;
