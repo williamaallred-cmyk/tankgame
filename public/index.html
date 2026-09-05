@@ -364,9 +364,6 @@
             } else if (data.type === 'hitTree') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#b45309', alpha: 1.0 });
                 for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
-            } else if (data.type === 'hitHideout') {
-                explosions.push({ x: data.x, y: data.y, radius: 8, color: '#d97706', alpha: 0.95 });
-                for (let i = 0; i < 8; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, color: '#fbbf24', size: 2, life: 12, maxLife: 12 });
             } else if (data.type === 'hitTank') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
                 let pCount = Math.min(30, Math.max(10, Math.floor(data.damage / 10)));
@@ -729,12 +726,13 @@
                 let isMe = (id === myId);
                 let isVisible = true;
 
-                // If tank is hiding in a hideout and we're not that tank, we can't see it
-                if (!isMe && p.hideoutId) {
+                // If target tank is hiding in a hideout and we're not in a hideout, we can't see it
+                if (!isMe && p.hideoutId && !myTank.hideoutId) {
                     isVisible = false;
-                } else if (!isMe && myTank) {
-                    // Fog of War Line of Sight Calculation
+                } else if (!isMe && myTank && !myTank.hideoutId) {
+                    // Line of Sight blocked only if I'm not in a hideout (hideouts let you see out)
                     for (let tree of trees) {
+                        if (tree.type === 'hideout') continue; // hideouts don't block vision
                         if (pointSegmentDist(tree.x, tree.y, myTank.x, myTank.y, p.x, p.y) < tree.radius * 0.85) {
                             isVisible = false;
                             break;

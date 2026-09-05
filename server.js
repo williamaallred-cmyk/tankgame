@@ -477,6 +477,7 @@ setInterval(() => {
             if (!hit) {
                 for (let k = room.trees.length - 1; k >= 0; k--) {
                     let t = room.trees[k];
+                    if (t.type === 'hideout') continue; // hideouts don't block shots, they only hide tanks visually
                     let effHit = null;
                     if (t.w && t.h) {
                         effHit = segmentIntersectsRect(oldX, oldY, proj.x, proj.y, t.x, t.y, t.w, t.h);
@@ -490,36 +491,6 @@ setInterval(() => {
                         io.to(roomId).emit('effect', { type: 'hitTree', x: effHit.hitX, y: effHit.hitY });
                         if (t.hp <= 0) {
                             io.to(roomId).emit('effect', { type: 'obstacleRemoved', id: t.id, x: t.x, y: t.y, radius: t.radius });
-                            room.trees.splice(k, 1);
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // Hideout collision (before player collision so hideout can block shots)
-            if (!hit) {
-                for (let k = room.trees.length - 1; k >= 0; k--) {
-                    let h = room.trees[k];
-                    if (h.type !== 'hideout') continue;
-                    let effHit = null;
-                    if (h.w && h.h) {
-                        effHit = segmentIntersectsRect(oldX, oldY, proj.x, proj.y, h.x, h.y, h.w, h.h);
-                    } else {
-                        const cr = pointSegmentDist(h.x, h.y, oldX, oldY, proj.x, proj.y);
-                        if (cr.distance < h.radius) effHit = { hitX: cr.hitX, hitY: cr.hitY };
-                    }
-                    if (effHit) {
-                        hit = true;
-                        h.hp--;
-                        io.to(roomId).emit('effect', { type: 'hitHideout', x: effHit.hitX, y: effHit.hitY });
-                        if (h.hp <= 0) {
-                            io.to(roomId).emit('effect', { type: 'obstacleRemoved', id: h.id, x: h.x, y: h.y, radius: h.radius });
-                            for (let pId in room.players) {
-                                if (room.players[pId].hideoutId === h.id) {
-                                    room.players[pId].hideoutId = null;
-                                }
-                            }
                             room.trees.splice(k, 1);
                         }
                         break;
