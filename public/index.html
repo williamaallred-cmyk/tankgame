@@ -531,7 +531,6 @@
                     ctx.fillStyle = '#a0896f'; ctx.beginPath(); ctx.ellipse(-obs.radius*0.3, -obs.radius*0.15, obs.radius*0.65, obs.radius*0.5, 0, 0, Math.PI*2); ctx.fill();
                     ctx.fillStyle = '#9d8565'; ctx.beginPath(); ctx.ellipse(obs.radius*0.25, obs.radius*0.1, obs.radius*0.55, obs.radius*0.4, 0.3, 0, Math.PI*2); ctx.fill();
                 }
-                ctx.restore();
             } else {
                 const sway = Math.sin(time * 0.002 + obs.swayOffset) * 2;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(obs.x, obs.y + 4, obs.radius * 0.8, 0, Math.PI * 2); ctx.fill();
