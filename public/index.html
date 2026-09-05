@@ -111,6 +111,7 @@
                                 <div>
                                     <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Map Type</label>
                                     <select id="mapTypeSelect" class="w-full bg-gray-950 text-white border border-gray-700 rounded p-2 text-sm outline-none focus:border-emerald-500 transition">
+                                        <option value="random">🎲 Random (Changes Each Round)</option>
                                         <option value="forest">🌲 Forest (Dense Cover)</option>
                                         <option value="desert">🏜 Desert (Open Field)</option>
                                         <option value="city">🏙 City (Urban Combat)</option>
@@ -363,6 +364,9 @@
             } else if (data.type === 'hitTree') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#b45309', alpha: 1.0 });
                 for (let i = 0; i < 6; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, color: '#f59e0b', size: 3, life: 10, maxLife: 10 });
+            } else if (data.type === 'hitHideout') {
+                explosions.push({ x: data.x, y: data.y, radius: 8, color: '#d97706', alpha: 0.95 });
+                for (let i = 0; i < 8; i++) particles.push({ x: data.x, y: data.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, color: '#fbbf24', size: 2, life: 12, maxLife: 12 });
             } else if (data.type === 'hitTank') {
                 explosions.push({ x: data.x, y: data.y, radius: 6, color: '#ef4444', alpha: 1.0 });
                 let pCount = Math.min(30, Math.max(10, Math.floor(data.damage / 10)));
@@ -500,6 +504,34 @@
                 ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(3, 4, obs.radius * 0.9, obs.radius * 0.7, 0, 0, Math.PI*2); ctx.fill();
                 ctx.fillStyle = '#6b6b5e'; ctx.beginPath(); ctx.ellipse(0, 0, obs.radius, obs.radius * 0.75, 0.3, 0, Math.PI*2); ctx.fill();
                 ctx.fillStyle = '#888878'; ctx.beginPath(); ctx.ellipse(-obs.radius*0.2, -obs.radius*0.2, obs.radius*0.5, obs.radius*0.35, 0, 0, Math.PI*2); ctx.fill();
+            } else if (obs.type === 'hideout') {
+                // Render hideout/cover objects
+                if (obs.hideoutType === 'brush') {
+                    // Brush pile (forest)
+                    const sway = Math.sin(time * 0.003 + obs.swayOffset) * 1.5;
+                    ctx.translate(obs.x, obs.y);
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; ctx.beginPath(); ctx.ellipse(2, 3, obs.radius * 0.85, obs.radius * 0.65, 0, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#3d5c2f'; ctx.beginPath(); ctx.ellipse(sway*0.5, -2, obs.radius*0.9, obs.radius*0.8, 0.2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#4a7c3e'; ctx.beginPath(); ctx.ellipse(sway*0.3, 1, obs.radius*0.7, obs.radius*0.6, -0.2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#5a9c4e'; ctx.beginPath(); ctx.ellipse(-sway*0.2, 0, obs.radius*0.5, obs.radius*0.4, 0, 0, Math.PI*2); ctx.fill();
+                } else if (obs.hideoutType === 'rubble') {
+                    // Rubble pile (city)
+                    ctx.translate(obs.x, obs.y);
+                    const hw = obs.w || obs.radius * 1.5, hh = obs.h || obs.radius * 1.2;
+                    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(-hw/2 + 3, -hh/2 + 3, hw, hh);
+                    ctx.fillStyle = '#6b5c4f'; ctx.fillRect(-hw/2, -hh/2, hw, hh);
+                    ctx.fillStyle = '#8b7c6f'; ctx.fillRect(-hw/2 + 4, -hh/2 + 4, hw - 8, hh - 8);
+                    ctx.fillStyle = '#5a4c3f'; ctx.fillRect(-hw/2, -hh/2, hw*0.4, hh*0.4);
+                    ctx.fillRect(hw/2 - hw*0.3, hh/2 - hh*0.35, hw*0.35, hh*0.35);
+                } else {
+                    // Rock formation hideout (desert)
+                    ctx.translate(obs.x, obs.y);
+                    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(2, 3, obs.radius*0.95, obs.radius*0.75, 0, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#8b7355'; ctx.beginPath(); ctx.ellipse(0, -1, obs.radius*0.95, obs.radius*0.7, 0.2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#a0896f'; ctx.beginPath(); ctx.ellipse(-obs.radius*0.3, -obs.radius*0.15, obs.radius*0.65, obs.radius*0.5, 0, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#9d8565'; ctx.beginPath(); ctx.ellipse(obs.radius*0.25, obs.radius*0.1, obs.radius*0.55, obs.radius*0.4, 0.3, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.restore();
             } else {
                 const sway = Math.sin(time * 0.002 + obs.swayOffset) * 2;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(obs.x, obs.y + 4, obs.radius * 0.8, 0, Math.PI * 2); ctx.fill();
@@ -698,8 +730,11 @@
                 let isMe = (id === myId);
                 let isVisible = true;
 
-                // Fog of War Line of Sight Calculation
-                if (!isMe && myTank) {
+                // If tank is hiding in a hideout and we're not that tank, we can't see it
+                if (!isMe && p.hideoutId) {
+                    isVisible = false;
+                } else if (!isMe && myTank) {
+                    // Fog of War Line of Sight Calculation
                     for (let tree of trees) {
                         if (pointSegmentDist(tree.x, tree.y, myTank.x, myTank.y, p.x, p.y) < tree.radius * 0.85) {
                             isVisible = false;

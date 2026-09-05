@@ -66,10 +66,15 @@ function generateObstacles(mapType, destructible) {
     const treeHp = destructible ? 3    : 9999;
     const rockHp = destructible ? 5    : 9999;
     const bldHp  = destructible ? 15   : 9999;
+    const hideHp = destructible ? 8    : 9999;  // hideout/cover HP
 
     if (mapType === 'desert') {
         for (let i = 0; i < 10; i++) {
             obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: rockHp, swayOffset: 0, type: 'rock' });
+        }
+        // Add rock formation hideouts in desert
+        for (let i = 0; i < 6; i++) {
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 16 + 12, hp: hideHp, swayOffset: 0, type: 'hideout', hideoutType: 'rocks' });
         }
     } else if (mapType === 'city') {
         // Structured grid with regular streets (80px) + wide avenues/boulevards
@@ -91,6 +96,11 @@ function generateObstacles(mapType, destructible) {
         for (let i = 0; i < 8; i++) {
             obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 200) + 100, y: Math.random() * (WORLD_HEIGHT - 200) + 100, radius: Math.random() * 8 + 8, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
         }
+        // Add rubble pile hideouts in city
+        for (let i = 0; i < 8; i++) {
+            let rw = Math.floor(Math.random() * 30) + 35, rh = Math.floor(Math.random() * 25) + 30;
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(rw, rh) / 2, w: rw, h: rh, hp: hideHp, swayOffset: 0, type: 'hideout', hideoutType: 'rubble' });
+        }
     } else if (mapType === 'hybrid') {
         for (let i = 0; i < 28; i++) {
             obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 18 + 15, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
@@ -99,10 +109,24 @@ function generateObstacles(mapType, destructible) {
             let bw = Math.floor(Math.random() * 25) + 40, bh = Math.floor(Math.random() * 20) + 30;
             obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(bw, bh) / 2, w: bw, h: bh, hp: bldHp, swayOffset: 0, type: 'building' });
         }
+        // Add mixed hideouts (brush and rubble) in hybrid
+        for (let i = 0; i < 7; i++) {
+            const isRubble = Math.random() < 0.5;
+            if (isRubble) {
+                let rw = Math.floor(Math.random() * 30) + 35, rh = Math.floor(Math.random() * 25) + 30;
+                obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.max(rw, rh) / 2, w: rw, h: rh, hp: hideHp, swayOffset: 0, type: 'hideout', hideoutType: 'rubble' });
+            } else {
+                obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: hideHp, swayOffset: Math.random() * 50, type: 'hideout', hideoutType: 'brush' });
+            }
+        }
     } else {
         // forest (default)
         for (let i = 0; i < 55; i++) {
             obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 20 + 18, hp: treeHp, swayOffset: Math.random() * 100, type: 'tree' });
+        }
+        // Add brush pile hideouts in forest
+        for (let i = 0; i < 10; i++) {
+            obstacles.push({ id: id++, x: Math.random() * (WORLD_WIDTH - 100) + 50, y: Math.random() * (WORLD_HEIGHT - 100) + 50, radius: Math.random() * 14 + 10, hp: hideHp, swayOffset: Math.random() * 100, type: 'hideout', hideoutType: 'brush' });
         }
     }
     return obstacles;
@@ -202,7 +226,8 @@ io.on('connection', (socket) => {
             if (!r.isPrivate) {
                 const humanCount = Object.values(r.players).filter(p => !p.isBot).length;
                 const bots = Object.values(r.players).filter(p => p.isBot).length;
-                publicRooms.push({ id: roomId, name: r.name, playerCount: humanCount, maxPlayers: r.maxPlayers, botCount: bots, mapType: r.mapType || 'forest', eraRestriction: r.eraRestriction || 'All', destructible: r.destructible || false });
+                const displayMapType = r.currentMapType || r.mapType || 'forest';
+                publicRooms.push({ id: roomId, name: r.name, playerCount: humanCount, maxPlayers: r.maxPlayers, botCount: bots, mapType: displayMapType, eraRestriction: r.eraRestriction || 'All', destructible: r.destructible || false });
             }
         }
         socket.emit('publicRoomsList', publicRooms);
@@ -215,8 +240,9 @@ io.on('connection', (socket) => {
         let roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
         let safeUsername = isBad(data.username) ? "TrollTank" : data.username;
         if (!safeUsername.trim()) safeUsername = "Player";
-        const validMaps = ['forest', 'desert', 'city', 'hybrid'];
-        const mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
+        const validMaps = ['forest', 'desert', 'city', 'hybrid', 'random'];
+        let mapType = validMaps.includes(data.mapType) ? data.mapType : 'forest';
+        if (mapType === 'random') mapType = ['forest', 'desert', 'city', 'hybrid'][Math.floor(Math.random() * 4)];
         const validEras = ['All', 'WW1', 'WW2', 'Cold War', 'Modern Era'];
         const eraRestriction = validEras.includes(data.eraRestriction) ? data.eraRestriction : 'All';
         const destructible = data.destructible === true || data.destructible === 'true';
@@ -227,7 +253,7 @@ io.on('connection', (socket) => {
         activeRooms[roomId] = {
             id: roomId,
             name: roomName,
-            mapType: mapType,
+            mapType: data.mapType,  // Store original (might be 'random')
             eraRestriction: eraRestriction,
             destructible: destructible,
             isPrivate: data.isPrivate === 'private',
@@ -236,6 +262,7 @@ io.on('connection', (socket) => {
             players: {},
             projectiles: [],
             trees: generateObstacles(mapType, destructible),
+            currentMapType: mapType,  // Actual map in use
             winner: null
         };
 
@@ -258,6 +285,7 @@ io.on('connection', (socket) => {
                 id: botId, username: botNames[b % botNames.length], tankTypeId: tankId,
                 x: spawn.x, y: spawn.y, angle: spawn.angle, turretAngle: spawn.angle,
                 hp: botStats.hp, maxHp: botStats.hp, kills: 0, reloadCooldown: 0,
+                hideoutId: null,
                 isBot: true, _wander: 0, _wanderTick: 0,
                 inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false },
                 debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
@@ -300,6 +328,7 @@ io.on('connection', (socket) => {
             hp: stats.hp, maxHp: stats.hp,
             kills: 0,
             reloadCooldown: 0,
+            hideoutId: null,
             inputs: { w: false, a: false, s: false, d: false, mouseX: 0, mouseY: 0, mouseDown: false },
             debuffs: { track: 0, engine: 0, turret: 0, gun: 0 }
         };
@@ -379,6 +408,19 @@ setInterval(() => {
             p.x = Math.max(20, Math.min(WORLD_WIDTH - 20, p.x));
             p.y = Math.max(20, Math.min(WORLD_HEIGHT - 20, p.y));
 
+            // Detect if tank is inside a hideout
+            p.hideoutId = null;
+            for (let hideout of room.trees) {
+                if (hideout.type !== 'hideout') continue;
+                const isInside = (hideout.w && hideout.h)
+                    ? Math.abs(p.x - hideout.x) < hideout.w/2 - 5 && Math.abs(p.y - hideout.y) < hideout.h/2 - 5
+                    : dist(p.x, p.y, hideout.x, hideout.y) < hideout.radius - 5;
+                if (isInside) {
+                    p.hideoutId = hideout.id;
+                    break;
+                }
+            }
+
             if (FIXED_GUN_TANKS.has(p.tankTypeId)) {
                 p.turretAngle = p.angle; // gun locked to hull
             } else {
@@ -454,6 +496,36 @@ setInterval(() => {
                 }
             }
 
+            // Hideout collision (before player collision so hideout can block shots)
+            if (!hit) {
+                for (let k = room.trees.length - 1; k >= 0; k--) {
+                    let h = room.trees[k];
+                    if (h.type !== 'hideout') continue;
+                    let effHit = null;
+                    if (h.w && h.h) {
+                        effHit = segmentIntersectsRect(oldX, oldY, proj.x, proj.y, h.x, h.y, h.w, h.h);
+                    } else {
+                        const cr = pointSegmentDist(h.x, h.y, oldX, oldY, proj.x, proj.y);
+                        if (cr.distance < h.radius) effHit = { hitX: cr.hitX, hitY: cr.hitY };
+                    }
+                    if (effHit) {
+                        hit = true;
+                        h.hp--;
+                        io.to(roomId).emit('effect', { type: 'hitHideout', x: effHit.hitX, y: effHit.hitY });
+                        if (h.hp <= 0) {
+                            io.to(roomId).emit('effect', { type: 'obstacleRemoved', id: h.id, x: h.x, y: h.y, radius: h.radius });
+                            for (let pId in room.players) {
+                                if (room.players[pId].hideoutId === h.id) {
+                                    room.players[pId].hideoutId = null;
+                                }
+                            }
+                            room.trees.splice(k, 1);
+                        }
+                        break;
+                    }
+                }
+            }
+
             if (!hit) {
                 for (let pId in room.players) {
                     if (pId !== proj.ownerId) {
@@ -518,16 +590,23 @@ setInterval(() => {
                                         // Reset room for new round
                                         room.winner = null;
                                         room.projectiles = [];
-                                        room.trees = generateObstacles(room.mapType || 'forest', room.destructible || false);
+                                        // Pick a new map type if random mode is enabled
+                                        let mapTypeForNewRound = room.mapType;
+                                        if (room.mapType === 'random') {
+                                            mapTypeForNewRound = ['forest', 'desert', 'city', 'hybrid'][Math.floor(Math.random() * 4)];
+                                        }
+                                        room.currentMapType = mapTypeForNewRound;
+                                        room.trees = generateObstacles(mapTypeForNewRound, room.destructible || false);
                                         for (let pid in room.players) {
                                             let rp = room.players[pid];
                                             let rs = TANK_STATS[rp.tankTypeId] || TANK_STATS['m4'];
                                             let sp = getRandomSpawn(room);
                                             rp.x = sp.x; rp.y = sp.y; rp.angle = sp.angle; rp.turretAngle = sp.angle;
                                             rp.hp = rs.hp; rp.maxHp = rs.hp; rp.kills = 0; rp.reloadCooldown = 0;
+                                            rp.hideoutId = null;
                                             rp.debuffs = { track: 0, engine: 0, turret: 0, gun: 0 };
                                         }
-                                        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: room.mapType || 'forest', eraRestriction: room.eraRestriction || 'All', destructible: room.destructible || false, trees: room.trees });
+                                        io.to(roomId).emit('gameStart', { roomId: roomId, roomName: room.name, mapType: mapTypeForNewRound, eraRestriction: room.eraRestriction || 'All', destructible: room.destructible || false, trees: room.trees });
                                     }, 5000);
                                 } else {
                                     setTimeout(() => {
