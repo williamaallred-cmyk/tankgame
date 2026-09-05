@@ -195,6 +195,12 @@ function updateBotAI(bot, room, stats) {
         if (id === bot.id || p.hp <= 0) continue;
         let d = dist(bot.x, bot.y, p.x, p.y);
         if (d < minDist) { minDist = d; nearest = p; }
+        // AI cannot see players in unrevealed hideouts (they must have shot to be revealed)
+        if (nearest && nearest.hideoutId) {
+            if (!room.revealedHideouts.has(nearest.hideoutId)) {
+                nearest = null; // Can't see this target
+            }
+        }
     }
     const i = bot.inputs;
     if (!nearest) {
@@ -265,6 +271,7 @@ io.on('connection', (socket) => {
             currentMapType: mapType,  // Actual map in use
             winner: null
         };
+        activeRooms[roomId].revealedHideouts = new Set(); // hideouts revealed by shots
 
         if (eraRestriction !== 'All' && TANK_ERAS[data.tankId] !== eraRestriction) {
             delete activeRooms[roomId];
@@ -454,6 +461,10 @@ setInterval(() => {
                     ownerId: id
                 });
                 p.reloadCooldown = stats.reload;
+                // Reveal hideout if player shoots from one (AI will now see them)
+                if (p.hideoutId && !room.revealedHideouts.has(p.hideoutId)) {
+                    room.revealedHideouts.add(p.hideoutId);
+                }
                 io.to(roomId).emit('effect', { type: 'fire', x: p.x + Math.cos(finalAngle)*35, y: p.y + Math.sin(finalAngle)*35 });
             }
         }
@@ -562,6 +573,7 @@ setInterval(() => {
                                         // Reset room for new round
                                         room.winner = null;
                                         room.projectiles = [];
+                                                                                room.revealedHideouts.clear(); // reset revealed hideouts for new round
                                         // Pick a new map type if random mode is enabled
                                         let mapTypeForNewRound = room.mapType;
                                         if (room.mapType === 'random') {
